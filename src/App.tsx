@@ -1,91 +1,50 @@
-import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Layout, Menu, ConfigProvider, theme } from 'antd'
-import { 
-  HomeOutlined, 
-  DashboardOutlined, 
-  InfoCircleOutlined 
-} from '@ant-design/icons'
-import Home from './components/Home'
-import About from './components/About'
-import Dashboard from './components/Dashboard'
-
-const { Header, Content } = Layout;
+import { Routes, Route } from "react-router-dom";
+import { ConfigProvider, theme } from "antd";
+import Navbar from "./components/Navbar";
+import Home from "./components/Home";
+import About from "./components/About";
+import Dashboard from "./components/Dashboard";
+import Footer from "./components/Footer";
 
 function App() {
-  const location = useLocation();
-
-  const darkTheme = {
+  const oilTheme = {
     algorithm: theme.darkAlgorithm,
     token: {
-      colorPrimary: '#238636',
-      colorBgContainer: '#161b22',
-      colorBgElevated: '#21262d',
-      colorBorder: '#30363d',
-      colorText: '#e6edf3',
-      colorTextSecondary: '#8b949e',
-      borderRadius: 8,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      colorPrimary: "#F59E0B",
+      colorBgBase: "#0B1120",
+      colorBgContainer: "#111827",
+      colorBorder: "#1f2937",
+      colorText: "#e5e7eb",
+      fontFamily: "Inter, sans-serif",
+      borderRadius: 12,
+    },
+    components: {
+      Card: {
+        colorBgContainer: "rgba(26, 35, 50, 0.6)",
+        colorBorderSecondary: "rgba(255, 255, 255, 0.08)",
+      },
+      Table: {
+        colorBgContainer: "transparent",
+        headerBg: "rgba(255, 255, 255, 0.03)",
+      },
     },
   };
 
-  const menuItems = [
-    {
-      key: '/',
-      icon: <HomeOutlined />,
-      label: <Link to="/">Home</Link>,
-    },
-    {
-      key: '/dashboard',
-      icon: <DashboardOutlined />,
-      label: <Link to="/dashboard">Dashboard</Link>,
-    },
-    {
-      key: '/about',
-      icon: <InfoCircleOutlined />,
-      label: <Link to="/about">About</Link>,
-    },
-  ];
-
   return (
-    <ConfigProvider theme={darkTheme}>
-      <Layout style={{ minHeight: '100vh', background: '#0d1117' }}>
-        <Header 
-          style={{ 
-            background: '#161b22', 
-            padding: '0 24px',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Menu
-            mode="horizontal"
-            selectedKeys={[location.pathname]}
-            items={menuItems}
-            style={{ 
-              background: 'transparent', 
-              borderBottom: 'none',
-              flex: 1,
-              justifyContent: 'center',
-              maxWidth: 500,
-            }}
-          />
-        </Header>
-        
-        <Content style={{ background: '#0d1117' }}>
+    <ConfigProvider theme={oilTheme}>
+      <div className="min-h-screen bg-oil-black text-gray-200 selection:bg-oil-gold/30 selection:text-white overflow-x-hidden">
+        <Navbar />
+        <main>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/about" element={<About />} />
           </Routes>
-        </Content>
-      </Layout>
+        </main>
+        <Footer />
+      </div>
     </ConfigProvider>
-  )
+  );
 }
 
-export default App
+export default App;
