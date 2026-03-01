@@ -531,13 +531,13 @@ function Dashboard() {
                   r: 4,
                   fill: "#F59E0B",
                   strokeWidth: 2,
-                  stroke: "#0B1120",
+                  stroke: "#0e0c0a",
                 }}
                 activeDot={{
                   r: 6,
                   fill: "#F59E0B",
                   strokeWidth: 3,
-                  stroke: "#0B1120",
+                  stroke: "#0e0c0a",
                 }}
               />
               <ReferenceLine

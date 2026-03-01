@@ -4,14 +4,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        "oil-black": "#0B1120",
-        "oil-dark": "#111827",
-        "oil-card": "#1a2332",
-        "oil-surface": "#1f2937",
+        "oil-black": "#0e0c0a",
+        "oil-dark": "#191713",
+        "oil-card": "#211f1b",
+        "oil-surface": "#2b2824",
         "oil-gold": "#F59E0B",
         "oil-amber": "#D97706",
         "oil-light-gold": "#FCD34D",
-        "oil-slate": "#334155",
+        "oil-slate": "#3d3732",
         "oil-green": "#10B981",
         "oil-red": "#EF4444",
         "oil-blue": "#3B82F6",

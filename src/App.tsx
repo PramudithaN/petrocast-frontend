@@ -11,16 +11,16 @@ function App() {
     algorithm: theme.darkAlgorithm,
     token: {
       colorPrimary: "#F59E0B",
-      colorBgBase: "#0B1120",
-      colorBgContainer: "#111827",
-      colorBorder: "#1f2937",
+      colorBgBase: "#0e0c0a",
+      colorBgContainer: "#191713",
+      colorBorder: "#2b2824",
       colorText: "#e5e7eb",
       fontFamily: "Inter, sans-serif",
       borderRadius: 12,
     },
     components: {
       Card: {
-        colorBgContainer: "rgba(26, 35, 50, 0.6)",
+        colorBgContainer: "rgba(33, 31, 27, 0.6)",
         colorBorderSecondary: "rgba(255, 255, 255, 0.08)",
       },
       Table: {
