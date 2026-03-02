@@ -29,7 +29,7 @@ describe('Navbar Component', () => {
     expect(nav).toHaveClass('bg-transparent');
 
     // Simulate scroll
-    fireEvent.scroll(globalThis as any, { target: { scrollY: 100 } });
-    fireEvent.scroll(globalThis as any);
+    fireEvent.scroll(globalThis.window, { target: { scrollY: 100 } });
+    fireEvent.scroll(globalThis.window);
   });
 });
