@@ -315,7 +315,7 @@ function Dashboard() {
             <span>Market Intelligence</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight font-display flex items-center gap-4">
-            Brent Crude Oil
+            Brent Crude Oil{' '}
             <span className="text-lg text-gray-500 font-normal font-sans">
               BZ=F
             </span>
