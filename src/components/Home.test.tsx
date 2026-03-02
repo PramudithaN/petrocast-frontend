@@ -5,11 +5,17 @@ import Home from './Home';
 
 // Mock IntersectionObserver
 class MockIntersectionObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+  observe() {
+    // Mock implementation - no operation needed
+  }
+  unobserve() {
+    // Mock implementation - no operation needed
+  }
+  disconnect() {
+    // Mock implementation - no operation needed
+  }
 }
-window.IntersectionObserver = MockIntersectionObserver as any;
+globalThis.IntersectionObserver = MockIntersectionObserver as any;
 
 describe('Home Component', () => {
   it('renders correctly', () => {

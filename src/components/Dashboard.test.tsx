@@ -4,15 +4,15 @@ import Dashboard from './Dashboard';
 
 // Set up fetch mock
 const mockFetch = vi.fn();
-window.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 // Mock Response
 const mockData = {
   last_price_date: '2025-01-01',
   last_price: 71.5,
   forecasts: [
-    { forecasted_date: '2025-01-02', forecasted_price: 72.0 },
-    { forecasted_date: '2025-01-03', forecasted_price: 73.0 }
+    { forecasted_date: '2025-01-02', forecasted_price: 72 },
+    { forecasted_date: '2025-01-03', forecasted_price: 73 }
   ]
 };
 
