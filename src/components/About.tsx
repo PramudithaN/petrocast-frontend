@@ -68,7 +68,7 @@ const PipelineStep = ({
       className="flex items-start gap-4 relative"
     >
       {/* Timeline */}
-      <div className="flex flex-col items-center flex-shrink-0">
+      <div className="flex flex-col items-center shrink-0">
         <motion.div
           initial={{ scale: 0 }}
           animate={inView ? { scale: 1 } : { scale: 0 }}
@@ -389,7 +389,7 @@ const About = () => {
                 className="group glass p-6 rounded-2xl hover:border-oil-gold/20 transition-all duration-500"
               >
                 <div className="flex items-start gap-4">
-                  <div className="p-3 rounded-xl bg-white/5 group-hover:bg-oil-gold/10 transition-colors flex-shrink-0">
+                  <div className="p-3 rounded-xl bg-white/5 group-hover:bg-oil-gold/10 transition-colors shrink-0">
                     {item.icon}
                   </div>
                   <div className="flex-1">

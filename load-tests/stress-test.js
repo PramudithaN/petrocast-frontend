@@ -30,6 +30,7 @@ export default function stressTest() {
   const pages = ['/', '/dashboard', '/about'];
   
   // Random page selection to simulate real user behavior
+  // NOSONAR: Math.random() is safe here - used only for load test simulation, not security
   const page = pages[Math.floor(Math.random() * pages.length)];
   
   const response = http.get(`${BASE_URL}${page}`);
@@ -45,6 +46,7 @@ export default function stressTest() {
     errorRate.add(1);
   }
   
+  // NOSONAR: Math.random() is safe here - used only for load test timing variation, not security
   sleep(Math.random() * 3 + 1); // Random sleep between 1-4 seconds
 }
 

@@ -451,7 +451,7 @@ const Home = () => {
                   </div>
 
                   {/* Timeline dot */}
-                  <div className="hidden md:flex items-center justify-center flex-shrink-0">
+                  <div className="hidden md:flex items-center justify-center shrink-0">
                     <div className="w-4 h-4 rounded-full bg-oil-gold shadow-[0_0_15px_rgba(245,158,11,0.4)] border-2 border-oil-black" />
                   </div>
 
