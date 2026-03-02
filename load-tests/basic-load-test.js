@@ -25,7 +25,7 @@ export const options = {
 // Replace with your actual deployment URL
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:5173';
 
-export default function () {
+export default function loadTest() {
   // Test Home page
   let response = http.get(`${BASE_URL}/`);
   check(response, {

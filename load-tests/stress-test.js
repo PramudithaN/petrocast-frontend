@@ -26,7 +26,7 @@ export const options = {
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:5173';
 
-export default function () {
+export default function stressTest() {
   const pages = ['/', '/dashboard', '/about'];
   
   // Random page selection to simulate real user behavior
