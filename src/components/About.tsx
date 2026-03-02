@@ -344,15 +344,15 @@ const About = () => {
           </motion.div>
 
           <div className="pl-2">
-            {pipeline.map((item, idx) => (
+            {pipeline.map((item) => (
               <PipelineStep
-                key={idx}
+                key={item.step}
                 icon={item.icon}
                 title={item.title}
                 desc={item.desc}
                 step={item.step}
-                isLast={idx === pipeline.length - 1}
-                delay={idx}
+                isLast={pipeline.indexOf(item) === pipeline.length - 1}
+                delay={pipeline.indexOf(item)}
               />
             ))}
           </div>
@@ -381,9 +381,9 @@ const About = () => {
             variants={stagger}
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
-            {capabilities.map((item, idx) => (
+            {capabilities.map((item) => (
               <motion.div
-                key={idx}
+                key={item.text}
                 variants={childFade}
                 whileHover={{ scale: 1.02 }}
                 className="group glass p-6 rounded-2xl hover:border-oil-gold/20 transition-all duration-500"

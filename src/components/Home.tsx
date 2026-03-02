@@ -359,9 +359,9 @@ const Home = () => {
             variants={stagger}
             className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            {features.map((feature, idx) => (
+            {features.map((feature) => (
               <motion.div
-                key={idx}
+                key={feature.title}
                 variants={childFade}
                 whileHover={{ y: -8, transition: { duration: 0.3 } }}
                 className="group relative p-8 rounded-3xl glass hover:border-oil-gold/30 transition-all duration-500 cursor-default"
@@ -425,7 +425,7 @@ const Home = () => {
             <div className="space-y-8 md:space-y-0">
               {howItWorks.map((item, idx) => (
                 <motion.div
-                  key={idx}
+                  key={item.step}
                   variants={childFade}
                   className={`relative md:flex items-center gap-8 md:mb-12 ${
                     idx % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"
@@ -497,9 +497,9 @@ const Home = () => {
             variants={stagger}
             className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            {audiences.map((item, idx) => (
+            {audiences.map((item) => (
               <motion.div
-                key={idx}
+                key={item.title}
                 variants={childFade}
                 whileHover={{ y: -6 }}
                 className="group glass p-8 rounded-3xl hover:border-oil-gold/20 transition-all duration-500"
