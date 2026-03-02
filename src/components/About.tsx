@@ -429,9 +429,9 @@ const About = () => {
             variants={stagger}
             className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            {techStack.map((stack, index) => (
+            {techStack.map((stack) => (
               <motion.div
-                key={index}
+                key={stack.title}
                 variants={childFade}
                 whileHover={{ y: -6 }}
                 className="group glass p-8 rounded-3xl hover:border-oil-gold/20 transition-all duration-500 relative overflow-hidden"
@@ -449,9 +449,9 @@ const About = () => {
                     </h3>
                   </div>
                   <ul className="space-y-3">
-                    {stack.items.map((item, i) => (
+                    {stack.items.map((item) => (
                       <li
-                        key={i}
+                        key={item}
                         className="flex items-center gap-3 text-gray-400 text-sm font-medium"
                       >
                         <div className="w-1.5 h-1.5 rounded-full bg-oil-gold/60" />

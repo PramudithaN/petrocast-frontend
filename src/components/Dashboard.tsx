@@ -44,8 +44,8 @@ const SkeletonDashboard = () => (
       <Skeleton className="h-12 w-44 rounded-xl" />
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {[1, 2, 3, 4].map((i) => (
-        <Skeleton key={i} className="h-36 rounded-2xl" />
+      {[1, 2, 3, 4].map((cardNum) => (
+        <Skeleton key={cardNum} className="h-36 rounded-2xl" />
       ))}
     </div>
     <Skeleton className="h-[450px] rounded-3xl" />
