@@ -67,3 +67,7 @@ coverage/
 *.pem
 .vercel
 .netlify
+
+# Load Testing Results
+load-test-results*.json
+summary-*.json

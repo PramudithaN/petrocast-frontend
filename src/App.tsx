@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import Home from "./components/Home";
 import About from "./components/About";
 import Dashboard from "./components/Dashboard";
+import PerformanceMonitor from "./components/PerformanceMonitor";
 import Footer from "./components/Footer";
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/about" element={<About />} />
+            <Route path="/performance" element={<PerformanceMonitor />} />
           </Routes>
         </main>
         <Footer />

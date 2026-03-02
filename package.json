@@ -9,7 +9,12 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "load-test:local": "k6 run load-tests/basic-load-test.js",
+    "load-test:prod": "k6 run load-tests/basic-load-test.js -e BASE_URL=$PRODUCTION_URL",
+    "load-test:stress": "k6 run load-tests/stress-test.js -e BASE_URL=$PRODUCTION_URL",
+    "load-test:spike": "k6 run load-tests/spike-test.js -e BASE_URL=$PRODUCTION_URL",
+    "load-test:soak": "k6 run load-tests/soak-test.js -e BASE_URL=$PRODUCTION_URL"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
