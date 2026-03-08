@@ -12,13 +12,6 @@ const About = () => {
   return (
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 md:px-8 lg:px-10 relative overflow-hidden bg-oil-black">
       <GlowEffect
-        color="gold"
-        size="md"
-        position={{ top: "5rem", left: "2.5rem" }}
-        blur={100}
-        opacity={5}
-      />
-      <GlowEffect
         color="blue"
         size="lg"
         position={{ bottom: "10rem", right: "2.5rem" }}
