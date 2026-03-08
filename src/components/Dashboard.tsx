@@ -25,6 +25,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import CountUp from "react-countup";
+import AnimatedButton from "./ui/AnimatedButton";
 
 const API_URL = "https://pramudithan-oil-price-prediction.hf.space/predict";
 
@@ -179,14 +180,14 @@ function Dashboard() {
             Connection Error
           </h2>
           <p className="text-gray-400 text-sm mb-8 leading-relaxed">{error}</p>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+          <AnimatedButton
+            variant="primary"
             onClick={fetchPredictions}
-            className="px-6 py-3 bg-gradient-to-r from-oil-gold to-oil-amber text-oil-black font-bold rounded-xl text-sm"
+            hoverScale={1.03}
+            className="px-6 py-3 rounded-xl text-sm"
           >
             Retry Connection
-          </motion.button>
+          </AnimatedButton>
         </motion.div>
       </div>
     );
@@ -333,7 +334,7 @@ function Dashboard() {
           whileTap={{ scale: 0.97 }}
           onClick={fetchPredictions}
           disabled={refreshing}
-          className="group flex items-center gap-3 px-6 py-3 glass hover:border-oil-gold/30 rounded-xl text-white font-medium transition-all duration-300 disabled:opacity-50"
+          className={`group flex items-center gap-3 px-6 py-3 glass hover:border-oil-gold/30 rounded-xl text-white font-medium transition-all duration-300 disabled:opacity-50 ${refreshing ? "cursor-not-allowed" : "cursor-pointer"}`}
         >
           <RefreshCw
             size={18}

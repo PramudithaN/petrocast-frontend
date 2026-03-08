@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Home, Info, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import AnimatedButton from "./ui/AnimatedButton";
 
 const Navbar = () => {
   const location = useLocation();
@@ -89,14 +90,14 @@ const Navbar = () => {
           {/* Desktop CTA */}
           <div className="hidden lg:block">
             <Link to="/dashboard">
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="px-4 py-2 bg-gradient-to-r from-oil-gold to-oil-amber text-oil-black font-semibold text-xs rounded-xl transition-all shadow-lg shadow-oil-gold/20 hover:shadow-oil-gold/40 flex items-center gap-1.5 whitespace-nowrap"
+              <AnimatedButton
+                variant="primary"
+                hoverScale={1.03}
+                className="px-4 py-2 text-xs rounded-xl shadow-lg shadow-oil-gold/20 hover:shadow-oil-gold/40 whitespace-nowrap"
               >
                 <AreaChart size={16} />
                 Live Forecast
-              </motion.button>
+              </AnimatedButton>
             </Link>
           </div>
 
@@ -169,7 +170,7 @@ const Navbar = () => {
               </div>
               <div className="p-4 border-t border-white/5">
                 <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
-                  <button className="w-full px-5 py-3 bg-gradient-to-r from-oil-gold to-oil-amber text-oil-black font-semibold text-sm rounded-xl flex items-center justify-center gap-2">
+                  <button className="w-full px-5 py-3 bg-gradient-to-r from-oil-gold to-oil-amber text-oil-black font-semibold text-sm rounded-xl flex items-center justify-center gap-2 cursor-pointer">
                     <AreaChart size={16} />
                     Live Forecast
                   </button>
