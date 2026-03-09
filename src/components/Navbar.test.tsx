@@ -11,7 +11,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
 describe('Navbar Component', () => {
   it('renders the brand name', () => {
     renderWithRouter(<Navbar />);
-    expect(screen.getByText('OilCheck')).toBeInTheDocument();
+    expect(screen.getByText('PetroCast')).toBeInTheDocument();
   });
 
   it('contains the navigation links', () => {

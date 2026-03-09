@@ -47,7 +47,7 @@ const Navbar = () => {
             </motion.div>
             <div className="flex flex-col">
               <span className="text-lg font-bold font-display text-gradient-gold leading-tight">
-                OilCheck
+                PetroCast
               </span>
               <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-medium">
                 AI Forecast
@@ -133,7 +133,7 @@ const Navbar = () => {
               <div className="p-6 border-b border-white/5">
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-bold font-display text-gradient-gold">
-                    OilCheck
+                    PetroCast
                   </span>
                   <button
                     onClick={() => setMobileOpen(false)}

@@ -61,7 +61,7 @@ const FeaturesSection = () => {
             variants={childFade}
             className="text-oil-gold text-sm font-semibold uppercase tracking-widest mb-3"
           >
-            Why OilCheck
+            Why PetroCast
           </motion.p>
           <motion.h2
             variants={childFade}
