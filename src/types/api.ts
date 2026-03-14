@@ -11,4 +11,5 @@ export interface PredictionResponse {
   last_price_date: string;
   last_price: number;
   forecasts: Forecast[];
+  market_state: string;
 }

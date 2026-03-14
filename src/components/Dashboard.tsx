@@ -21,8 +21,9 @@ import {
   RefreshCw,
   Activity,
   Gauge,
-  Clock,
+  Radio,
   AlertTriangle,
+  Clock,
 } from "lucide-react";
 import CountUp from "react-countup";
 import AnimatedButton from "./ui/AnimatedButton";
@@ -326,6 +327,28 @@ function Dashboard() {
             Last Updated:{" "}
             <span className="text-gray-300 font-medium">
               {formatDate(data.last_price_date)}
+            </span>
+          </p>
+          <p className="text-gray-500 mt-2 flex items-center gap-2 text-sm">
+            <Radio size={14} />
+            Market Status:{" "}
+            <span
+              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                data.market_state?.toLowerCase() === "open"
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : "bg-red-500/10 text-red-400"
+              }`}
+            >
+              <motion.span
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className={`w-1.5 h-1.5 rounded-full ${
+                  data.market_state?.toLowerCase() === "open"
+                    ? "bg-emerald-400"
+                    : "bg-red-400"
+                }`}
+              />
+              {data.market_state}
             </span>
           </p>
         </div>
