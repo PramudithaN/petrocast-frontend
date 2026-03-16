@@ -6,6 +6,10 @@ import {
   PredictionResponse,
 } from "../types/api";
 import {
+  fetchHistoricalPrices as fetchHistoricalPricesApi,
+  fetchPredictions as fetchPredictionsApi,
+} from "../api";
+import {
   AreaChart,
   Area,
   Bar,
@@ -34,11 +38,6 @@ import {
 } from "lucide-react";
 import CountUp from "react-countup";
 import AnimatedButton from "./ui/AnimatedButton";
-
-const API_URL = "https://pramudithan-oil-price-prediction.hf.space/predict";
-const HISTORICAL_API_URL =
-  "https://pramudithan-oil-price-prediction.hf.space/historical/prices";
-const HISTORICAL_PAGE_LIMIT = 500;
 
 /* ─── Skeleton Loader ─── */
 const Skeleton = ({ className = "" }: { className?: string }) => (
@@ -133,9 +132,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-const normalizeDateOnly = (dateString: string): string =>
-  dateString.includes("T") ? dateString.split("T")[0] : dateString;
-
 function Dashboard() {
   const [activeTab, setActiveTab] = useState<"forecast" | "historical">(
     "forecast",
@@ -158,10 +154,7 @@ function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(API_URL);
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
-      const result: PredictionResponse = await response.json();
+      const result = await fetchPredictionsApi();
       setData(result);
     } catch (err) {
       setError(
@@ -176,56 +169,8 @@ function Dashboard() {
     try {
       setHistoricalLoading(true);
       setHistoricalError(null);
-
-      const fetchPage = async (
-        offset: number,
-        limit: number,
-      ): Promise<HistoricalPricesResponse> => {
-        const response = await fetch(
-          `${HISTORICAL_API_URL}?limit=${limit}&offset=${offset}`,
-        );
-        if (!response.ok)
-          throw new Error(`HTTP error! status: ${response.status}`);
-        return response.json();
-      };
-
-      const firstPage = await fetchPage(0, HISTORICAL_PAGE_LIMIT);
-      const totalAvailable = firstPage.total_available ?? firstPage.total_records;
-      const pageLimit = firstPage.limit || HISTORICAL_PAGE_LIMIT;
-      const allRows = [...firstPage.data];
-
-      let offset = firstPage.offset + firstPage.data.length;
-
-      while (offset < totalAvailable) {
-        const page = await fetchPage(offset, pageLimit);
-        if (!page.data.length) break;
-        allRows.push(...page.data);
-        offset += page.data.length;
-      }
-
-      // Guard against any overlap between pages and keep timeline order stable.
-      const uniqueRows = Array.from(
-        new Map(allRows.map((row) => [row.date, row])).values(),
-      ).sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-      );
-
-      const mergedResponse: HistoricalPricesResponse = {
-        ...firstPage,
-        data: uniqueRows,
-        total_records: uniqueRows.length,
-        offset: 0,
-        date_range: {
-          start: uniqueRows.length
-            ? normalizeDateOnly(uniqueRows[0].date)
-            : firstPage.date_range.start,
-          end: uniqueRows.length
-            ? normalizeDateOnly(uniqueRows[uniqueRows.length - 1].date)
-            : firstPage.date_range.end,
-        },
-      };
-
-      setHistoricalData(mergedResponse);
+      const result = await fetchHistoricalPricesApi();
+      setHistoricalData(result);
     } catch (err) {
       setHistoricalError(
         err instanceof Error
