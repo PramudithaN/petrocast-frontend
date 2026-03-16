@@ -203,6 +203,7 @@ function Dashboard() {
   const priceChangePercent =
     data.last_price > 0 ? (priceChange / data.last_price) * 100 : 0;
   const isPositive = priceChange >= 0;
+  const isMarketRunning = data.market_state?.toUpperCase() === "TRADING_DAY";
 
   // Chart data
   const chartData = [
@@ -334,7 +335,7 @@ function Dashboard() {
             Market Status:{" "}
             <span
               className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${
-                data.market_state?.toLowerCase() === "open"
+                isMarketRunning
                   ? "bg-emerald-500/10 text-emerald-400"
                   : "bg-red-500/10 text-red-400"
               }`}
@@ -343,12 +344,12 @@ function Dashboard() {
                 animate={{ opacity: [1, 0.3, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
                 className={`w-1.5 h-1.5 rounded-full ${
-                  data.market_state?.toLowerCase() === "open"
+                  isMarketRunning
                     ? "bg-emerald-400"
                     : "bg-red-400"
                 }`}
               />
-              {data.market_state}
+              {isMarketRunning ? "Running" : "Closed"}
             </span>
           </p>
         </div>
