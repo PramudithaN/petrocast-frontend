@@ -4,11 +4,13 @@ import type { ColumnsType } from "antd/es/table";
 import {
   FanResponse,
   HistoricalPricesResponse,
+  PredictionComparisonResponse,
   PredictionResponse,
 } from "../types/api";
 import {
   fetchFanPredictions as fetchFanPredictionsApi,
   fetchHistoricalPricesProgressive as fetchHistoricalPricesProgressiveApi,
+  fetchPredictionComparison as fetchPredictionComparisonApi,
   fetchPredictions as fetchPredictionsApi,
 } from "../api";
 import {
@@ -138,19 +140,67 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-function Dashboard() {
-  const [activeTab, setActiveTab] = useState<"forecast" | "historical">(
-    "forecast",
+const AnalyticsTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+
+  const point = payload[0]?.payload;
+  if (!point) return null;
+
+  return (
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[220px]">
+      <p className="text-xs text-gray-400 mb-3">{label}</p>
+      <div className="space-y-2 text-xs">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-gray-500">Actual</span>
+          <span className="font-mono text-oil-cyan">
+            ${point.actualPrice.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-gray-500">Predicted</span>
+          <span className="font-mono text-oil-gold">
+            ${point.predictedPrice.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-gray-500">Absolute Error</span>
+          <span className="font-mono text-white">
+            ${point.absoluteError.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-gray-500">Prediction Count</span>
+          <span className="font-mono text-gray-300">{point.predictionCount}</span>
+        </div>
+      </div>
+    </div>
   );
+};
+
+const DEFAULT_ANALYTICS_START_DATE = "2026-01-01";
+const DEFAULT_ANALYTICS_END_DATE = "2026-03-17";
+
+function Dashboard() {
+  const [activeTab, setActiveTab] = useState<
+    "forecast" | "historical" | "analytics"
+  >("forecast");
   const [data, setData] = useState<PredictionResponse | null>(null);
   const [historicalData, setHistoricalData] =
     useState<HistoricalPricesResponse | null>(null);
   const [fanData, setFanData] = useState<FanResponse | null>(null);
+  const [analyticsData, setAnalyticsData] =
+    useState<PredictionComparisonResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [historicalLoading, setHistoricalLoading] = useState<boolean>(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(true);
   const [historicalProgress, setHistoricalProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [analyticsStartDate, setAnalyticsStartDate] =
+    useState<string>(DEFAULT_ANALYTICS_START_DATE);
+  const [analyticsEndDate, setAnalyticsEndDate] =
+    useState<string>(DEFAULT_ANALYTICS_END_DATE);
   const [refreshing, setRefreshing] = useState(false);
   const { notify } = useNotification();
   const dateUtils = useDateUtils();
@@ -163,6 +213,10 @@ function Dashboard() {
     fetchPredictions();
     fetchFan();
     fetchHistoricalPrices();
+    fetchPredictionComparison(
+      DEFAULT_ANALYTICS_START_DATE,
+      DEFAULT_ANALYTICS_END_DATE,
+    );
   }, []);
 
   const fetchPredictions = async () => {
@@ -229,9 +283,54 @@ function Dashboard() {
     }
   };
 
+  const fetchPredictionComparison = async (
+    startDate = analyticsStartDate,
+    endDate = analyticsEndDate,
+  ) => {
+    if (!startDate || !endDate) {
+      const msg = "Select both a start and end date to load analytics";
+      setAnalyticsError(msg);
+      notify({ type: "warning", title: "Analytics dates missing", message: msg });
+      return;
+    }
+
+    if (startDate > endDate) {
+      const msg = "Start date must be earlier than or equal to end date";
+      setAnalyticsError(msg);
+      notify({ type: "warning", title: "Invalid date range", message: msg });
+      return;
+    }
+
+    try {
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
+      const result = await fetchPredictionComparisonApi(startDate, endDate);
+      setAnalyticsData(result);
+      notify({
+        type: "success",
+        title: "Analytics updated",
+        message: `${result.metrics.compared_days} compared day${result.metrics.compared_days === 1 ? "" : "s"} loaded`,
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch predicted vs actual comparison";
+      setAnalyticsError(msg);
+      notify({ type: "error", title: "Analytics failed", message: msg });
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPredictions(), fetchFan(), fetchHistoricalPrices()]);
+    await Promise.all([
+      fetchPredictions(),
+      fetchFan(),
+      fetchHistoricalPrices(),
+      fetchPredictionComparison(analyticsStartDate, analyticsEndDate),
+    ]);
     setTimeout(() => setRefreshing(false), 500);
   };
 
@@ -428,6 +527,29 @@ function Dashboard() {
   const historicalEndDate = historicalData?.date_range?.end
     ? dateUtils.format(historicalData.date_range.end, "medium")
     : "-";
+  const analyticsChartData = (analyticsData?.comparison ?? []).map((item) => ({
+    date: dateUtils.format(item.date, "short"),
+    actualPrice: item.actual_price,
+    predictedPrice: item.predicted_price,
+    medianPrice: item.predicted_price_median,
+    latestPrice: item.predicted_price_latest,
+    absoluteError: item.abs_error,
+    percentError: item.abs_pct_error,
+    predictionCount: item.prediction_count,
+    rawDate: item.date,
+  }));
+  const analyticsPriceValues = analyticsChartData.flatMap((item) => [
+    item.actualPrice,
+    item.predictedPrice,
+  ]);
+  const analyticsMinPrice = analyticsPriceValues.length
+    ? Math.min(...analyticsPriceValues)
+    : 0;
+  const analyticsMaxPrice = analyticsPriceValues.length
+    ? Math.max(...analyticsPriceValues)
+    : 0;
+  const analyticsPriceRange = analyticsMaxPrice - analyticsMinPrice;
+  const analyticsMetrics = analyticsData?.metrics;
 
   return (
     <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1600px] mx-auto min-h-screen bg-oil-black">
@@ -520,6 +642,16 @@ function Dashboard() {
           }`}
         >
           Historical Data
+        </button>
+        <button
+          onClick={() => setActiveTab("analytics")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold uppercase transition-all duration-300 cursor-pointer ${
+            activeTab === "analytics"
+              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-400/40"
+              : "bg-white/5 text-gray-400 border border-white/10 hover:text-white"
+          }`}
+        >
+          Analytics
         </button>
       </div>
 
@@ -772,31 +904,6 @@ function Dashboard() {
               />
             </div>
           </motion.div>
-
-          {/* Fan Chart */}
-          {fanData && fanData.fan.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.57, duration: 0.5 }}
-              className="glass p-6 md:p-8 rounded-3xl"
-            >
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                  <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-cyan to-oil-blue" />
-                  Probabilistic Fan Chart
-                </h3>
-                <span className="text-xs text-gray-500">
-                  Uncertainty bands: P10 – P90
-                </span>
-              </div>
-              <FanChart
-                fan={fanData.fan}
-                lastPrice={fanData.last_price}
-                lastPriceDate={fanData.last_price_date}
-              />
-            </motion.div>
-          )}
 
           {/* Data Table */}
           <motion.div
@@ -1073,6 +1180,289 @@ function Dashboard() {
                   </ResponsiveContainer>
                 </div>
               </motion.div>
+            </>
+          )}
+        </>
+      )}
+
+      {activeTab === "analytics" && (
+        <>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass p-6 md:p-8 rounded-3xl"
+          >
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+              <div>
+                <div className="text-xs text-emerald-300/80 font-semibold uppercase tracking-[0.24em] mb-2">
+                  Prediction Accuracy
+                </div>
+                <h3 className="text-xl font-bold text-white font-display">
+                  Predicted vs Actual Price Analytics
+                </h3>
+                <p className="text-sm text-gray-500 mt-2 max-w-3xl leading-relaxed">
+                  Compare realized Brent prices against the model&apos;s aggregated predictions for a custom date range.
+                </p>
+              </div>
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  fetchPredictionComparison(analyticsStartDate, analyticsEndDate);
+                }}
+                className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto"
+              >
+                <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500">
+                  <span>Start Date</span>
+                  <input
+                    type="date"
+                    value={analyticsStartDate}
+                    max={analyticsEndDate}
+                    onChange={(event) => setAnalyticsStartDate(event.target.value)}
+                    className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-white outline-none focus:border-emerald-400/60"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500">
+                  <span>End Date</span>
+                  <input
+                    type="date"
+                    value={analyticsEndDate}
+                    min={analyticsStartDate}
+                    onChange={(event) => setAnalyticsEndDate(event.target.value)}
+                    className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-white outline-none focus:border-emerald-400/60"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={analyticsLoading}
+                  className="h-fit self-end px-5 py-3 rounded-xl bg-emerald-400/15 border border-emerald-400/30 text-sm font-semibold text-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {analyticsLoading ? "Loading..." : "Update Analytics"}
+                </button>
+              </form>
+            </div>
+
+            {analyticsData && (
+              <div className="mt-6 flex flex-col gap-2 text-xs text-gray-500">
+                <span>
+                  Window: {dateUtils.formatRange(analyticsStartDate, analyticsEndDate)}
+                </span>
+                <span>{analyticsData.aggregation_strategy}</span>
+              </div>
+            )}
+          </motion.div>
+
+          {analyticsLoading && !analyticsData && (
+            <div className="space-y-4">
+              <Skeleton className="h-36 rounded-3xl" />
+              <Skeleton className="h-[420px] rounded-3xl" />
+            </div>
+          )}
+
+          {!analyticsLoading && analyticsError && (
+            <div className="glass p-10 rounded-3xl text-center">
+              <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-5">
+                <AlertTriangle size={28} className="text-red-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-3">Analytics Error</h3>
+              <p className="text-sm text-gray-400 mb-6">{analyticsError}</p>
+              <AnimatedButton
+                variant="primary"
+                onClick={() =>
+                  fetchPredictionComparison(analyticsStartDate, analyticsEndDate)
+                }
+                className="px-6 py-2.5 rounded-xl text-sm"
+              >
+                Retry Analytics Fetch
+              </AnimatedButton>
+            </div>
+          )}
+
+          {!analyticsLoading && !analyticsError && analyticsData && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass p-6 rounded-2xl"
+                >
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-3">
+                    Compared Days
+                  </div>
+                  <div className="text-3xl font-bold text-white font-display">
+                    {analyticsMetrics?.compared_days ?? analyticsData.total_days_returned}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">
+                    Dates with both actual and predicted values
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                  className="glass p-6 rounded-2xl"
+                >
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-3">
+                    MAE
+                  </div>
+                  <div className="text-3xl font-bold text-oil-gold font-display">
+                    ${analyticsMetrics?.mae.toFixed(2) ?? "0.00"}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">
+                    Mean absolute error across the selected window
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="glass p-6 rounded-2xl"
+                >
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-3">
+                    RMSE
+                  </div>
+                  <div className="text-3xl font-bold text-emerald-300 font-display">
+                    ${analyticsMetrics?.rmse.toFixed(2) ?? "0.00"}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">
+                    Penalizes larger misses more heavily
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className="glass p-6 rounded-2xl"
+                >
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-3">
+                    MAPE
+                  </div>
+                  <div className="text-3xl font-bold text-oil-cyan font-display">
+                    {analyticsMetrics?.mape.toFixed(2) ?? "0.00"}%
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">
+                    Average percentage deviation from actual prices
+                  </div>
+                </motion.div>
+              </div>
+
+              {analyticsChartData.length > 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="glass p-6 md:p-8 rounded-3xl"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+                    <div>
+                      <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
+                        <div className="w-1 h-6 rounded-full bg-gradient-to-b from-emerald-300 to-oil-cyan" />
+                        Actual vs Predicted Prices
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Weighted mean prediction compared with realized closing prices
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="flex items-center gap-1.5 text-gray-400">
+                        <div className="w-6 h-0.5 bg-oil-cyan" />
+                        Actual
+                      </span>
+                      <span className="flex items-center gap-1.5 text-gray-400">
+                        <div className="w-6 h-0.5 bg-oil-gold" />
+                        Predicted
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="h-[420px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={analyticsChartData}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.04)"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#4b5563"
+                          tick={{ fill: "#6b7280", fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          minTickGap={24}
+                        />
+                        <YAxis
+                          stroke="#4b5563"
+                          tick={{ fill: "#6b7280", fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          domain={[
+                            analyticsMinPrice - analyticsPriceRange * 0.15,
+                            analyticsMaxPrice + analyticsPriceRange * 0.15,
+                          ]}
+                          tickFormatter={(value) => `$${value.toFixed(0)}`}
+                        />
+                        <Tooltip content={<AnalyticsTooltip />} />
+                        <Line
+                          type="monotone"
+                          dataKey="actualPrice"
+                          stroke="#22D3EE"
+                          strokeWidth={2.4}
+                          dot={false}
+                          activeDot={{
+                            r: 5,
+                            fill: "#22D3EE",
+                            stroke: "#0f172a",
+                            strokeWidth: 2,
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="predictedPrice"
+                          stroke="#F59E0B"
+                          strokeWidth={2.4}
+                          dot={false}
+                          activeDot={{
+                            r: 5,
+                            fill: "#F59E0B",
+                            stroke: "#0f172a",
+                            strokeWidth: 2,
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="glass p-10 rounded-3xl text-center text-sm text-gray-400">
+                  No prediction comparison data was returned for the selected dates.
+                </div>
+              )}
+
+              {fanData && fanData.fan.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="glass p-6 md:p-8 rounded-3xl"
+                >
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
+                      <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-cyan to-oil-blue" />
+                      Probabilistic Fan Chart
+                    </h3>
+                    <span className="text-xs text-gray-500">
+                      Uncertainty bands: P10 – P90
+                    </span>
+                  </div>
+                  <FanChart
+                    fan={fanData.fan}
+                    lastPrice={fanData.last_price}
+                    lastPriceDate={fanData.last_price_date}
+                  />
+                </motion.div>
+              )}
             </>
           )}
         </>

@@ -3,12 +3,14 @@ import {
   HistoricalPricesResponse,
   NewsArticle,
   NewsResponse,
+  PredictionComparisonResponse,
   PredictionResponse,
 } from "../types/api";
 
 const BASE_API_URL = "https://pramudithan-oil-price-prediction.hf.space";
 const PREDICTION_API_URL = `${BASE_API_URL}/predict`;
 const FAN_API_URL = `${BASE_API_URL}/predictions/fan`;
+const COMPARE_API_URL = `${BASE_API_URL}/predictions/compare`;
 const HISTORICAL_API_URL = `${BASE_API_URL}/historical/prices`;
 const NEWS_API_URL = `${BASE_API_URL}/news`;
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
@@ -31,6 +33,20 @@ export const fetchPredictions = async (): Promise<PredictionResponse> =>
 
 export const fetchFanPredictions = async (): Promise<FanResponse> =>
   fetchJson<FanResponse>(FAN_API_URL);
+
+export const fetchPredictionComparison = async (
+  startDate: string,
+  endDate: string,
+): Promise<PredictionComparisonResponse> => {
+  const params = new URLSearchParams({
+    start_date: startDate,
+    end_date: endDate,
+  });
+
+  return fetchJson<PredictionComparisonResponse>(
+    `${COMPARE_API_URL}?${params.toString()}`,
+  );
+};
 
 export interface FetchNewsOptions {
   days?: number;
@@ -84,7 +100,7 @@ const normalizeNewsResponse = (payload: unknown): NewsResponse => {
     rawArticles = Array.isArray(listCandidate) ? listCandidate : [];
   }
 
-  const articles = rawArticles.map(toNewsArticle);
+  const articles = rawArticles.map((item, index) => toNewsArticle(item, index));
   const dates = Array.from(
     new Set(
       articles

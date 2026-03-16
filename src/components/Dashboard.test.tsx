@@ -2,6 +2,7 @@ import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Dashboard from './Dashboard';
 import { NotificationProvider } from '../context/NotificationContext';
+import { DateConfigProvider } from '../context/DateConfigContext';
 
 // Set up fetch mock
 const mockFetch = vi.fn();
@@ -72,6 +73,44 @@ const mockHistorical = {
   ],
 };
 
+const mockComparison = {
+  success: true,
+  start_date: '2026-01-01',
+  end_date: '2026-03-17',
+  total_days_returned: 2,
+  aggregation_strategy: 'weighted mean',
+  metrics: {
+    compared_days: 2,
+    mae: 1.2,
+    rmse: 1.6,
+    mape: 2.1,
+  },
+  comparison: [
+    {
+      date: '2026-01-29',
+      actual_price: 70.71,
+      predicted_price: 69.6,
+      predicted_price_median: 69.6,
+      predicted_price_latest: 69.6,
+      prediction_count: 1,
+      error: 1.11,
+      abs_error: 1.11,
+      abs_pct_error: 1.57,
+    },
+    {
+      date: '2026-01-30',
+      actual_price: 70.69,
+      predicted_price: 72.25,
+      predicted_price_median: 72.12,
+      predicted_price_latest: 72.52,
+      prediction_count: 2,
+      error: -1.56,
+      abs_error: 1.56,
+      abs_pct_error: 2.21,
+    },
+  ],
+};
+
 // Mock chart components since they access complex DOM APIs not in jsdom
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
@@ -91,9 +130,11 @@ vi.mock('recharts', () => ({
 
 const renderWithProviders = () =>
   render(
-    <NotificationProvider>
-      <Dashboard />
-    </NotificationProvider>,
+    <DateConfigProvider locale="en-US" timezone="UTC">
+      <NotificationProvider>
+        <Dashboard />
+      </NotificationProvider>
+    </DateConfigProvider>,
   );
 
 describe('Dashboard Component', () => {
@@ -111,6 +152,12 @@ describe('Dashboard Component', () => {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(mockHistorical),
+        });
+      }
+      if (url.includes('/predictions/compare')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockComparison),
         });
       }
       return Promise.resolve({

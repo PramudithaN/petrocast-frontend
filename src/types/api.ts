@@ -59,6 +59,35 @@ export interface FanResponse {
   fan: FanPoint[];
 }
 
+export interface PredictionComparisonMetrics {
+  compared_days: number;
+  mae: number;
+  rmse: number;
+  mape: number;
+}
+
+export interface PredictionComparisonPoint {
+  date: string;
+  actual_price: number;
+  predicted_price: number;
+  predicted_price_median: number;
+  predicted_price_latest: number;
+  prediction_count: number;
+  error: number;
+  abs_error: number;
+  abs_pct_error: number;
+}
+
+export interface PredictionComparisonResponse {
+  success: boolean;
+  start_date?: string;
+  end_date: string;
+  total_days_returned: number;
+  aggregation_strategy: string;
+  metrics: PredictionComparisonMetrics;
+  comparison: PredictionComparisonPoint[];
+}
+
 export interface NewsArticle {
   id: string;
   title: string;
