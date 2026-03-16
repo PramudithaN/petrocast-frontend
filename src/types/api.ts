@@ -58,3 +58,19 @@ export interface FanResponse {
   last_price: number;
   fan: FanPoint[];
 }
+
+export interface NewsArticle {
+  id: string;
+  title: string;
+  summary: string | null;
+  source: string | null;
+  url: string | null;
+  article_date: string;
+  published_at: string | null;
+}
+
+export interface NewsResponse {
+  success: boolean;
+  articles: NewsArticle[];
+  dates: string[];
+}

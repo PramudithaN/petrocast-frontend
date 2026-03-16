@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import Home from "./components/Home";
 import About from "./components/About";
 import Dashboard from "./components/Dashboard";
+import News from "./components/News";
 import PerformanceMonitor from "./components/PerformanceMonitor";
 import Footer from "./components/Footer";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -41,6 +42,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/news" element={<News />} />
               <Route path="/about" element={<About />} />
               <Route path="/performance" element={<PerformanceMonitor />} />
             </Routes>

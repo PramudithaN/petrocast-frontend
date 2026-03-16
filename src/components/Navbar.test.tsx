@@ -18,6 +18,7 @@ describe('Navbar Component', () => {
     renderWithRouter(<Navbar />);
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('News')).toBeInTheDocument();
     expect(screen.getByText('About')).toBeInTheDocument();
   });
 
