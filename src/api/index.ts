@@ -1,10 +1,12 @@
 import {
+  FanResponse,
   HistoricalPricesResponse,
   PredictionResponse,
 } from "../types/api";
 
 const BASE_API_URL = "https://pramudithan-oil-price-prediction.hf.space";
 const PREDICTION_API_URL = `${BASE_API_URL}/predict`;
+const FAN_API_URL = `${BASE_API_URL}/predictions/fan`;
 const HISTORICAL_API_URL = `${BASE_API_URL}/historical/prices`;
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
 
@@ -24,32 +26,13 @@ const fetchJson = async <T>(url: string): Promise<T> => {
 export const fetchPredictions = async (): Promise<PredictionResponse> =>
   fetchJson<PredictionResponse>(PREDICTION_API_URL);
 
-export const fetchHistoricalPrices = async (
-  pageLimit = DEFAULT_HISTORICAL_PAGE_LIMIT,
-): Promise<HistoricalPricesResponse> => {
-  const fetchPage = async (
-    offset: number,
-    limit: number,
-  ): Promise<HistoricalPricesResponse> =>
-    fetchJson<HistoricalPricesResponse>(
-      `${HISTORICAL_API_URL}?limit=${limit}&offset=${offset}`,
-    );
+export const fetchFanPredictions = async (): Promise<FanResponse> =>
+  fetchJson<FanResponse>(FAN_API_URL);
 
-  const firstPage = await fetchPage(0, pageLimit);
-  const totalAvailable = firstPage.total_available ?? firstPage.total_records;
-  const effectivePageLimit = firstPage.limit || pageLimit;
-  const allRows = [...firstPage.data];
-
-  let offset = firstPage.offset + firstPage.data.length;
-
-  while (offset < totalAvailable) {
-    const page = await fetchPage(offset, effectivePageLimit);
-    if (!page.data.length) break;
-
-    allRows.push(...page.data);
-    offset += page.data.length;
-  }
-
+const buildHistoricalResult = (
+  allRows: HistoricalPricesResponse["data"],
+  firstPage: HistoricalPricesResponse,
+): HistoricalPricesResponse => {
   // Guard against overlap between pages and keep timeline order stable.
   const uniqueRows = Array.from(
     new Map(allRows.map((row) => [row.date, row])).values(),
@@ -70,4 +53,73 @@ export const fetchHistoricalPrices = async (
         : firstPage.date_range.end,
     },
   };
+};
+
+const fetchHistoricalPage = (
+  offset: number,
+  limit: number,
+): Promise<HistoricalPricesResponse> =>
+  fetchJson<HistoricalPricesResponse>(
+    `${HISTORICAL_API_URL}?limit=${limit}&offset=${offset}`,
+  );
+
+export const fetchHistoricalPrices = async (
+  pageLimit = DEFAULT_HISTORICAL_PAGE_LIMIT,
+): Promise<HistoricalPricesResponse> => {
+  const firstPage = await fetchHistoricalPage(0, pageLimit);
+  const totalAvailable = firstPage.total_available ?? firstPage.total_records;
+  const effectivePageLimit = firstPage.limit || pageLimit;
+  const allRows = [...firstPage.data];
+
+  let offset = firstPage.offset + firstPage.data.length;
+
+  while (offset < totalAvailable) {
+    const page = await fetchHistoricalPage(offset, effectivePageLimit);
+    if (!page.data.length) break;
+
+    allRows.push(...page.data);
+    offset += page.data.length;
+  }
+
+  return buildHistoricalResult(allRows, firstPage);
+};
+
+/**
+ * Fetches historical prices page-by-page and calls `onProgress` after each
+ * page so callers can render partial data immediately instead of waiting for
+ * all pages to arrive.
+ *
+ * @param onProgress - called with the accumulated result and a 0-100 progress value
+ */
+export const fetchHistoricalPricesProgressive = async (
+  onProgress: (partial: HistoricalPricesResponse, progress: number) => void,
+  pageLimit = DEFAULT_HISTORICAL_PAGE_LIMIT,
+): Promise<HistoricalPricesResponse> => {
+  const firstPage = await fetchHistoricalPage(0, pageLimit);
+  const totalAvailable = firstPage.total_available ?? firstPage.total_records;
+  const effectivePageLimit = firstPage.limit || pageLimit;
+  const allRows = [...firstPage.data];
+
+  // Surface first page immediately so the chart can render at once.
+  const firstProgress = totalAvailable
+    ? Math.min((allRows.length / totalAvailable) * 100, 99)
+    : 100;
+  onProgress(buildHistoricalResult(allRows, firstPage), firstProgress);
+
+  let offset = firstPage.offset + firstPage.data.length;
+
+  while (offset < totalAvailable) {
+    const page = await fetchHistoricalPage(offset, effectivePageLimit);
+    if (!page.data.length) break;
+
+    allRows.push(...page.data);
+    offset += page.data.length;
+
+    const progress = Math.min((allRows.length / totalAvailable) * 100, 99);
+    onProgress(buildHistoricalResult(allRows, firstPage), progress);
+  }
+
+  const finalResult = buildHistoricalResult(allRows, firstPage);
+  onProgress(finalResult, 100);
+  return finalResult;
 };

@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  FanResponse,
   HistoricalPricesResponse,
   PredictionResponse,
 } from "../types/api";
 import {
-  fetchHistoricalPrices as fetchHistoricalPricesApi,
+  fetchFanPredictions as fetchFanPredictionsApi,
+  fetchHistoricalPricesProgressive as fetchHistoricalPricesProgressiveApi,
   fetchPredictions as fetchPredictionsApi,
 } from "../api";
 import {
@@ -35,9 +37,12 @@ import {
   Radio,
   AlertTriangle,
   Clock,
+  Download,
 } from "lucide-react";
 import CountUp from "react-countup";
 import AnimatedButton from "./ui/AnimatedButton";
+import FanChart from "./FanChart";
+import { useNotification } from "../context/NotificationContext";
 
 /* ─── Skeleton Loader ─── */
 const Skeleton = ({ className = "" }: { className?: string }) => (
@@ -139,14 +144,22 @@ function Dashboard() {
   const [data, setData] = useState<PredictionResponse | null>(null);
   const [historicalData, setHistoricalData] =
     useState<HistoricalPricesResponse | null>(null);
+  const [fanData, setFanData] = useState<FanResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [historicalLoading, setHistoricalLoading] = useState<boolean>(true);
+  const [historicalProgress, setHistoricalProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { notify } = useNotification();
+  // Guards against React StrictMode double-invocation firing the initial fetches twice.
+  const initialFetchDone = useRef(false);
 
   useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
     fetchPredictions();
+    fetchFan();
     fetchHistoricalPrices();
   }, []);
 
@@ -156,12 +169,32 @@ function Dashboard() {
       setError(null);
       const result = await fetchPredictionsApi();
       setData(result);
+      notify({
+        type: "success",
+        title: "Forecast loaded",
+        message: `${result.forecasts.length} trading day${result.forecasts.length === 1 ? "" : "s"} of predictions ready`,
+      });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch predictions",
-      );
+      const msg = err instanceof Error ? err.message : "Failed to fetch predictions";
+      setError(msg);
+      notify({ type: "error", title: "Forecast failed", message: msg });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFan = async () => {
+    try {
+      const result = await fetchFanPredictionsApi();
+      setFanData(result);
+      notify({
+        type: "info",
+        title: "Fan chart ready",
+        message: `${result.fan.length} probabilistic data points loaded`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Fan chart data unavailable";
+      notify({ type: "warning", title: "Fan chart unavailable", message: msg });
     }
   };
 
@@ -169,23 +202,66 @@ function Dashboard() {
     try {
       setHistoricalLoading(true);
       setHistoricalError(null);
-      const result = await fetchHistoricalPricesApi();
-      setHistoricalData(result);
+      setHistoricalProgress(0);
+      let isFirstPage = true;
+      await fetchHistoricalPricesProgressiveApi((partial, progress) => {
+        setHistoricalData(partial);
+        setHistoricalProgress(progress);
+        if (isFirstPage) {
+          setHistoricalLoading(false);
+          isFirstPage = false;
+        }
+        if (progress === 100) {
+          notify({
+            type: "success",
+            title: "Historical data ready",
+            message: `${partial.total_records.toLocaleString()} records loaded (${partial.date_range.start} – ${partial.date_range.end})`,
+          });
+        }
+      });
     } catch (err) {
-      setHistoricalError(
-        err instanceof Error
-          ? err.message
-          : "Failed to fetch historical prices",
-      );
-    } finally {
+      const msg = err instanceof Error ? err.message : "Failed to fetch historical prices";
+      setHistoricalError(msg);
+      notify({ type: "error", title: "Historical data failed", message: msg });
       setHistoricalLoading(false);
     }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPredictions(), fetchHistoricalPrices()]);
+    await Promise.all([fetchPredictions(), fetchFan(), fetchHistoricalPrices()]);
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const downloadHistoricalCSV = () => {
+    if (!historicalData?.data.length) return;
+
+    const header = "Date,Close,Open,High,Low,Volume,Change %";
+    const rows = historicalData.data.map((row) =>
+      [
+        row.date,
+        row.price,
+        row.open,
+        row.high,
+        row.low,
+        row.volume ?? "",
+        row.change_pct,
+      ].join(","),
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `brent-crude-historical-${historicalData.date_range.start}-${historicalData.date_range.end}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    notify({
+      type: "success",
+      title: "Download started",
+      message: `${historicalData.total_records.toLocaleString()} records exported as CSV`,
+    });
   };
 
   const formatPrice = (price: number): string => price.toFixed(2);
@@ -712,6 +788,31 @@ function Dashboard() {
             </div>
           </motion.div>
 
+          {/* Fan Chart */}
+          {fanData && fanData.fan.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.57, duration: 0.5 }}
+              className="glass p-6 md:p-8 rounded-3xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
+                  <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-cyan to-oil-blue" />
+                  Probabilistic Fan Chart
+                </h3>
+                <span className="text-xs text-gray-500">
+                  Uncertainty bands: P10 – P90
+                </span>
+              </div>
+              <FanChart
+                fan={fanData.fan}
+                lastPrice={fanData.last_price}
+                lastPriceDate={fanData.last_price_date}
+              />
+            </motion.div>
+          )}
+
           {/* Data Table */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -744,6 +845,23 @@ function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="glass p-4 md:p-5 rounded-2xl border border-white/10"
           >
+            {/* Header row with download button */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-gray-500 font-semibold uppercase tracking-widest">
+                Dataset Overview
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={downloadHistoricalCSV}
+                disabled={!historicalData?.data.length}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl glass border border-oil-cyan/30 text-oil-cyan text-xs font-semibold hover:border-oil-cyan/60 hover:bg-oil-cyan/5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Download size={14} />
+                Download CSV
+              </motion.button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
                 <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-[0.2em] mb-2">
@@ -787,6 +905,31 @@ function Dashboard() {
               </div>
             </div>
           </motion.div>
+
+          {/* Inline progress bar while pages are still streaming in */}
+          {historicalProgress < 100 && !historicalLoading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="rounded-2xl glass px-5 py-3 flex items-center gap-4"
+            >
+              <span className="text-xs text-gray-400 shrink-0">
+                Loading data&hellip;
+              </span>
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-oil-cyan to-oil-blue"
+                  initial={{ width: "0%" }}
+                  animate={{ width: `${historicalProgress}%` }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                />
+              </div>
+              <span className="text-xs font-mono text-oil-cyan shrink-0">
+                {Math.round(historicalProgress)}%
+              </span>
+            </motion.div>
+          )}
 
           {historicalLoading && (
             <div className="space-y-4">

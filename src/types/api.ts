@@ -40,3 +40,21 @@ export interface HistoricalPricesResponse {
   date_range: HistoricalDateRange;
   data: HistoricalPricePoint[];
 }
+
+export interface FanPoint {
+  date: string;
+  point_forecast: number;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  sample_count: number;
+}
+
+export interface FanResponse {
+  success: boolean;
+  last_price_date: string;
+  last_price: number;
+  fan: FanPoint[];
+}
