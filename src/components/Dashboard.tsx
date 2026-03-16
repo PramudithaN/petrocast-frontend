@@ -43,6 +43,7 @@ import CountUp from "react-countup";
 import AnimatedButton from "./ui/AnimatedButton";
 import FanChart from "./FanChart";
 import { useNotification } from "../context/NotificationContext";
+import { useDateUtils } from "../utils/dateUtils";
 
 /* ─── Skeleton Loader ─── */
 const Skeleton = ({ className = "" }: { className?: string }) => (
@@ -152,6 +153,7 @@ function Dashboard() {
   const [historicalError, setHistoricalError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const { notify } = useNotification();
+  const dateUtils = useDateUtils();
   // Guards against React StrictMode double-invocation firing the initial fetches twice.
   const initialFetchDone = useRef(false);
 
@@ -215,7 +217,7 @@ function Dashboard() {
           notify({
             type: "success",
             title: "Historical data ready",
-            message: `${partial.total_records.toLocaleString()} records loaded (${partial.date_range.start} – ${partial.date_range.end})`,
+            message: `${partial.total_records.toLocaleString()} records loaded (${dateUtils.formatRange(partial.date_range.start, partial.date_range.end)})`,
           });
         }
       });
@@ -253,7 +255,9 @@ function Dashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `brent-crude-historical-${historicalData.date_range.start}-${historicalData.date_range.end}.csv`;
+    const startDateFormatted = dateUtils.toISODate(historicalData.date_range.start);
+    const endDateFormatted = dateUtils.toISODate(historicalData.date_range.end);
+    a.download = `brent-crude-historical-${startDateFormatted}-${endDateFormatted}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
@@ -265,15 +269,6 @@ function Dashboard() {
   };
 
   const formatPrice = (price: number): string => price.toFixed(2);
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
 
   if (loading && !data) return <SkeletonDashboard />;
 
@@ -319,18 +314,12 @@ function Dashboard() {
   // Chart data
   const chartData = [
     {
-      date: new Date(data.last_price_date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
+      date: dateUtils.format(data.last_price_date, "short"),
       price: data.last_price,
       type: "Historical",
     },
     ...data.forecasts.map((f) => ({
-      date: new Date(f.date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
+      date: dateUtils.format(f.date, "short"),
       price: f.forecasted_price,
       type: "Forecast",
     })),
@@ -352,7 +341,7 @@ function Dashboard() {
       render: (date: string) => (
         <span className="text-gray-300 flex items-center gap-2">
           <Calendar size={14} className="text-gray-500" />
-          {formatDate(date)}
+          {dateUtils.format(date, "medium")}
         </span>
       ),
     },
@@ -411,11 +400,7 @@ function Dashboard() {
   const priceRange = maxPrice - minPrice;
 
   const historicalChartData = (historicalData?.data ?? []).map((item) => ({
-    date: new Date(item.date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "2-digit",
-    }),
+    date: dateUtils.format(item.date, "short"),
     price: item.price,
     open: item.open,
     high: item.high,
@@ -438,10 +423,10 @@ function Dashboard() {
     ? (historicalRecordsLoaded / historicalRecordsAvailable) * 100
     : 0;
   const historicalStartDate = historicalData?.date_range?.start
-    ? formatDate(historicalData.date_range.start)
+    ? dateUtils.format(historicalData.date_range.start, "medium")
     : "-";
   const historicalEndDate = historicalData?.date_range?.end
-    ? formatDate(historicalData.date_range.end)
+    ? dateUtils.format(historicalData.date_range.end, "medium")
     : "-";
 
   return (
@@ -472,7 +457,7 @@ function Dashboard() {
             <Clock size={14} />
             Last Updated:{" "}
             <span className="text-gray-300 font-medium">
-              {formatDate(data.last_price_date)}
+              {dateUtils.format(data.last_price_date, "medium")}
             </span>
           </p>
           <p className="text-gray-500 mt-2 flex items-center gap-2 text-sm">

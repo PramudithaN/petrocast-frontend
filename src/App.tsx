@@ -8,6 +8,7 @@ import News from "./components/News";
 import PerformanceMonitor from "./components/PerformanceMonitor";
 import Footer from "./components/Footer";
 import { NotificationProvider } from "./context/NotificationContext";
+import { DateConfigProvider } from "./context/DateConfigContext";
 
 function App() {
   const oilTheme = {
@@ -35,21 +36,23 @@ function App() {
 
   return (
     <ConfigProvider theme={oilTheme}>
-      <NotificationProvider>
-        <div className="min-h-screen bg-oil-black text-gray-200 selection:bg-oil-gold/30 selection:text-white overflow-x-hidden">
-          <Navbar />
-          <main>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/news" element={<News />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/performance" element={<PerformanceMonitor />} />
-            </Routes>
-          </main>
-          <Footer />
-        </div>
-      </NotificationProvider>
+      <DateConfigProvider locale="en-US">
+        <NotificationProvider>
+          <div className="min-h-screen bg-oil-black text-gray-200 selection:bg-oil-gold/30 selection:text-white overflow-x-hidden">
+            <Navbar />
+            <main>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/news" element={<News />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/performance" element={<PerformanceMonitor />} />
+              </Routes>
+            </main>
+            <Footer />
+          </div>
+        </NotificationProvider>
+      </DateConfigProvider>
     </ConfigProvider>
   );
 }

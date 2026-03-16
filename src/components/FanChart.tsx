@@ -11,6 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { FanPoint } from "../types/api";
+import { useDateUtils } from "../utils/dateUtils";
 
 interface FanChartProps {
   readonly fan: FanPoint[];
@@ -89,12 +90,10 @@ const FanDot = (props: any) => {
 };
 
 export default function FanChart({ fan, lastPrice, lastPriceDate }: FanChartProps) {
+  const dateUtils = useDateUtils();
   const chartData = useMemo<ChartRow[]>(() => {
     const anchor: ChartRow = {
-      date: new Date(lastPriceDate).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
+      date: dateUtils.format(lastPriceDate, "short"),
       type: "anchor",
       price: lastPrice,
       point_forecast: lastPrice,
@@ -110,10 +109,7 @@ export default function FanChart({ fan, lastPrice, lastPriceDate }: FanChartProp
     };
 
     const rows: ChartRow[] = fan.map((f) => ({
-      date: new Date(f.date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
+      date: dateUtils.format(f.date, "short"),
       type: "forecast",
       point_forecast: f.point_forecast,
       band_outer: [f.p10, f.p90],
@@ -128,7 +124,7 @@ export default function FanChart({ fan, lastPrice, lastPriceDate }: FanChartProp
     }));
 
     return [anchor, ...rows];
-  }, [fan, lastPrice, lastPriceDate]);
+  }, [fan, lastPrice, lastPriceDate, dateUtils]);
 
   const allValues = chartData.flatMap((d) => [
     d.point_forecast ?? lastPrice,
