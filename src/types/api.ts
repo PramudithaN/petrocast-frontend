@@ -94,6 +94,7 @@ export interface NewsArticle {
   summary: string | null;
   source: string | null;
   url: string | null;
+  image_url: string | null;
   article_date: string;
   published_at: string | null;
 }

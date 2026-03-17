@@ -82,6 +82,10 @@ const toNewsArticle = (item: unknown, index: number): NewsArticle => {
     source:
       toStringOrNull(row.source) ?? toStringOrNull(row.publisher) ?? null,
     url: toStringOrNull(row.url) ?? toStringOrNull(row.link),
+    image_url:
+      toStringOrNull(row.image_url) ??
+      toStringOrNull(row.image) ??
+      toStringOrNull(row.thumbnail),
     article_date: articleDate,
     published_at: toStringOrNull(row.published_at),
   };

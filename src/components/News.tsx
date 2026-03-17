@@ -33,6 +33,7 @@ const News = () => {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [mode, setMode] = useState<Mode>("recent");
   const [daysInput, setDaysInput] = useState("7");
   const [dateInput, setDateInput] = useState("");
@@ -58,6 +59,7 @@ const News = () => {
       setError(null);
       const result = await fetchNews(options);
       setArticles(result.articles);
+      setFailedImages({});
       setCurrentPage(1);
       notify({
         type: "success",
@@ -258,8 +260,31 @@ const News = () => {
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04 }}
-                  className="glass-strong rounded-2xl p-5 border border-white/10 flex flex-col gap-4"
+                  className="glass-strong rounded-2xl p-4 border border-white/10 flex flex-col gap-4"
                 >
+                  <div className="relative overflow-hidden rounded-xl h-44 bg-oil-dark/80 border border-white/10">
+                    {article.image_url && !failedImages[article.id] ? (
+                      <img
+                        src={article.image_url}
+                        alt={article.title}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={() =>
+                          setFailedImages((current) => ({
+                            ...current,
+                            [article.id]: true,
+                          }))
+                        }
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-oil-gold/20 via-oil-gold/5 to-oil-dark flex items-center justify-center">
+                        <Newspaper className="text-oil-light-gold/70" size={34} />
+                      </div>
+                    )}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent" />
+                  </div>
+
                   <div className="flex items-center justify-between gap-3 text-xs text-gray-400">
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar size={14} />
