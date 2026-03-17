@@ -14,9 +14,161 @@ const COMPARE_API_URL = `${BASE_API_URL}/predictions/compare`;
 const HISTORICAL_API_URL = `${BASE_API_URL}/historical/prices`;
 const NEWS_API_URL = `${BASE_API_URL}/news`;
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
+const EMPTY_DATE_RANGE = { start: "", end: "" };
 
 const normalizeDateOnly = (dateString: string): string =>
   dateString.includes("T") ? dateString.split("T")[0] : dateString;
+
+const toFiniteNumberOrNull = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const toFiniteNumberOrDefault = (value: unknown, fallback = 0): number =>
+  toFiniteNumberOrNull(value) ?? fallback;
+
+const toIntegerOrZero = (value: unknown): number => {
+  const parsed = toFiniteNumberOrNull(value);
+  return parsed === null ? 0 : Math.trunc(parsed);
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const toStringOrNull = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value : null;
+
+const toStringOrDefault = (value: unknown, fallback = ""): string =>
+  toStringOrNull(value) ?? fallback;
+
+const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
+  const response = isRecord(payload) ? payload : {};
+  const rawForecasts = Array.isArray(response.forecasts) ? response.forecasts : [];
+
+  const forecasts = rawForecasts
+    .map((item, index) => {
+      const forecast = isRecord(item) ? item : {};
+      const date = toStringOrDefault(forecast.date);
+
+      if (!date) return null;
+
+      return {
+        date,
+        forecasted_price: toFiniteNumberOrDefault(forecast.forecasted_price),
+        forecasted_return: toFiniteNumberOrDefault(forecast.forecasted_return),
+        horizon: toIntegerOrZero(forecast.horizon) || index + 1,
+      };
+    })
+    .filter((forecast): forecast is PredictionResponse["forecasts"][number] => forecast !== null);
+
+  return {
+    success: typeof response.success === "boolean" ? response.success : true,
+    data_source: toStringOrDefault(response.data_source, "unknown"),
+    last_price_date: toStringOrDefault(response.last_price_date),
+    last_price: toFiniteNumberOrDefault(response.last_price),
+    forecasts,
+    market_state: toStringOrDefault(response.market_state, "UNKNOWN"),
+  };
+};
+
+const normalizeFanResponse = (payload: unknown): FanResponse => {
+  const response = isRecord(payload) ? payload : {};
+  const lastPrice = toFiniteNumberOrDefault(response.last_price);
+  const rawFan = Array.isArray(response.fan) ? response.fan : [];
+
+  const fan = rawFan
+    .map((item) => {
+      const row = isRecord(item) ? item : {};
+      const date = toStringOrDefault(row.date);
+      if (!date) return null;
+
+      const pointForecast = toFiniteNumberOrDefault(row.point_forecast, lastPrice);
+
+      return {
+        date,
+        point_forecast: pointForecast,
+        p10: toFiniteNumberOrDefault(row.p10, pointForecast),
+        p25: toFiniteNumberOrDefault(row.p25, pointForecast),
+        p50: toFiniteNumberOrDefault(row.p50, pointForecast),
+        p75: toFiniteNumberOrDefault(row.p75, pointForecast),
+        p90: toFiniteNumberOrDefault(row.p90, pointForecast),
+        sample_count: toIntegerOrZero(row.sample_count),
+      };
+    })
+    .filter((point): point is FanResponse["fan"][number] => point !== null);
+
+  return {
+    success: typeof response.success === "boolean" ? response.success : true,
+    last_price_date: toStringOrDefault(response.last_price_date),
+    last_price: lastPrice,
+    fan,
+  };
+};
+
+const normalizeHistoricalRow = (item: unknown): HistoricalPricesResponse["data"][number] | null => {
+  const row = isRecord(item) ? item : {};
+  const date = toStringOrDefault(row.date);
+
+  if (!date) return null;
+
+  const price = toFiniteNumberOrDefault(row.price);
+  const open = toFiniteNumberOrDefault(row.open, price);
+  const highBase = Math.max(price, open);
+  const lowBase = Math.min(price, open);
+
+  return {
+    date,
+    price,
+    open,
+    high: toFiniteNumberOrDefault(row.high, highBase),
+    low: toFiniteNumberOrDefault(row.low, lowBase),
+    volume: toFiniteNumberOrNull(row.volume),
+    change_pct: toFiniteNumberOrDefault(row.change_pct),
+    source: toStringOrDefault(row.source, "unknown"),
+  };
+};
+
+const normalizeHistoricalResponse = (
+  payload: unknown,
+  fallbackLimit = DEFAULT_HISTORICAL_PAGE_LIMIT,
+): HistoricalPricesResponse => {
+  const response = isRecord(payload) ? payload : {};
+  const rawDateRange = isRecord(response.date_range) ? response.date_range : {};
+  const data = (Array.isArray(response.data) ? response.data : [])
+    .map((item) => normalizeHistoricalRow(item))
+    .filter((row): row is HistoricalPricesResponse["data"][number] => row !== null);
+
+  const normalizedDateRange = {
+    start:
+      toStringOrDefault(rawDateRange.start) ||
+      (data.length > 0 ? normalizeDateOnly(data[0].date) : EMPTY_DATE_RANGE.start),
+    end:
+      toStringOrDefault(rawDateRange.end) ||
+      (data.length > 0 ? normalizeDateOnly(data[data.length - 1].date) : EMPTY_DATE_RANGE.end),
+  };
+
+  return {
+    success: typeof response.success === "boolean" ? response.success : true,
+    granularity: toStringOrDefault(response.granularity, "daily"),
+    total_available: toIntegerOrZero(response.total_available) || data.length,
+    total_records: toIntegerOrZero(response.total_records) || data.length,
+    limit: toIntegerOrZero(response.limit) || fallbackLimit,
+    offset: toIntegerOrZero(response.offset),
+    date_range: normalizedDateRange,
+    data,
+  };
+};
 
 const fetchJson = async <T>(url: string): Promise<T> => {
   const response = await fetch(url);
@@ -29,10 +181,56 @@ const fetchJson = async <T>(url: string): Promise<T> => {
 };
 
 export const fetchPredictions = async (): Promise<PredictionResponse> =>
-  fetchJson<PredictionResponse>(PREDICTION_API_URL);
+  normalizePredictionResponse(await fetchJson<unknown>(PREDICTION_API_URL));
 
 export const fetchFanPredictions = async (): Promise<FanResponse> =>
-  fetchJson<FanResponse>(FAN_API_URL);
+  normalizeFanResponse(await fetchJson<unknown>(FAN_API_URL));
+
+const normalizePredictionComparisonResponse = (
+  payload: unknown,
+): PredictionComparisonResponse => {
+  const response = isRecord(payload) ? payload : {};
+  const rawMetrics = isRecord(response.metrics) ? response.metrics : {};
+  const rawComparison = Array.isArray(response.comparison)
+    ? response.comparison
+    : [];
+
+  const comparison = rawComparison
+    .map((item) => {
+      const row = isRecord(item) ? item : {};
+
+      return {
+        date: toStringOrNull(row.date) ?? "",
+        actual_price: toFiniteNumberOrNull(row.actual_price),
+        predicted_price: toFiniteNumberOrNull(row.predicted_price),
+        predicted_price_median: toFiniteNumberOrNull(row.predicted_price_median),
+        predicted_price_latest: toFiniteNumberOrNull(row.predicted_price_latest),
+        prediction_count: toIntegerOrZero(row.prediction_count),
+        error: toFiniteNumberOrNull(row.error),
+        abs_error: toFiniteNumberOrNull(row.abs_error),
+        abs_pct_error: toFiniteNumberOrNull(row.abs_pct_error),
+      };
+    })
+    .filter((row) => row.date.length > 0);
+
+  const comparedDays = toFiniteNumberOrNull(rawMetrics.compared_days);
+  const totalDaysReturned = toIntegerOrZero(response.total_days_returned);
+
+  return {
+    success: typeof response.success === "boolean" ? response.success : true,
+    start_date: toStringOrNull(response.start_date) ?? undefined,
+    end_date: toStringOrNull(response.end_date) ?? "",
+    total_days_returned: totalDaysReturned || comparison.length,
+    aggregation_strategy: toStringOrNull(response.aggregation_strategy) ?? "unknown",
+    metrics: {
+      compared_days: comparedDays ?? comparison.length,
+      mae: toFiniteNumberOrNull(rawMetrics.mae),
+      rmse: toFiniteNumberOrNull(rawMetrics.rmse),
+      mape: toFiniteNumberOrNull(rawMetrics.mape),
+    },
+    comparison,
+  };
+};
 
 export const fetchPredictionComparison = async (
   startDate: string,
@@ -43,21 +241,17 @@ export const fetchPredictionComparison = async (
     end_date: endDate,
   });
 
-  return fetchJson<PredictionComparisonResponse>(
+  const payload = await fetchJson<unknown>(
     `${COMPARE_API_URL}?${params.toString()}`,
   );
+
+  return normalizePredictionComparisonResponse(payload);
 };
 
 export interface FetchNewsOptions {
   days?: number;
   articleDate?: string;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const toStringOrNull = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 const toNewsArticle = (item: unknown, index: number): NewsArticle => {
   const row = isRecord(item) ? item : {};
@@ -167,8 +361,8 @@ const fetchHistoricalPage = (
   offset: number,
   limit: number,
 ): Promise<HistoricalPricesResponse> =>
-  fetchJson<HistoricalPricesResponse>(
-    `${HISTORICAL_API_URL}?limit=${limit}&offset=${offset}`,
+  fetchJson<unknown>(`${HISTORICAL_API_URL}?limit=${limit}&offset=${offset}`).then(
+    (payload) => normalizeHistoricalResponse(payload, limit),
   );
 
 export const fetchHistoricalPrices = async (

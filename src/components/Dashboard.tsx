@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -51,6 +51,37 @@ import { useDateUtils } from "../utils/dateUtils";
 const Skeleton = ({ className = "" }: { className?: string }) => (
   <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} />
 );
+
+const parseFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const formatFixed = (
+  value: number | null | undefined,
+  digits = 2,
+  fallback = "0.00",
+): string => (isFiniteNumber(value) ? value.toFixed(digits) : fallback);
+
+const formatCurrency = (
+  value: number | null | undefined,
+  digits = 2,
+  fallback = "0.00",
+): string => `$${formatFixed(value, digits, fallback)}`;
 
 const SkeletonDashboard = () => (
   <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1600px] mx-auto min-h-screen">
@@ -124,15 +155,14 @@ const SentimentGauge = ({ value }: { value: number }) => {
 /* ─── Custom Chart Tooltip ─── */
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
+  const value = parseFiniteNumber(payload[0]?.value);
+  const displayValue =
+    value === null ? String(payload[0]?.value ?? "-") : formatCurrency(value);
+
   return (
     <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[160px]">
       <p className="text-xs text-gray-400 mb-2">{label}</p>
-      <p className="text-xl font-bold text-oil-gold font-display">
-        $
-        {typeof payload[0].value === "number"
-          ? payload[0].value.toFixed(2)
-          : payload[0].value}
-      </p>
+      <p className="text-xl font-bold text-oil-gold font-display">{displayValue}</p>
       <p className="text-xs text-gray-500 mt-1">
         {payload[0]?.payload?.type === "Historical" ? "● Actual" : "◐ Forecast"}
       </p>
@@ -152,21 +182,15 @@ const AnalyticsTooltip = ({ active, payload, label }: any) => {
       <div className="space-y-2 text-xs">
         <div className="flex items-center justify-between gap-4">
           <span className="text-gray-500">Actual</span>
-          <span className="font-mono text-oil-cyan">
-            ${point.actualPrice.toFixed(2)}
-          </span>
+          <span className="font-mono text-oil-cyan">{formatCurrency(point.actualPrice)}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-gray-500">Predicted</span>
-          <span className="font-mono text-oil-gold">
-            ${point.predictedPrice.toFixed(2)}
-          </span>
+          <span className="font-mono text-oil-gold">{formatCurrency(point.predictedPrice)}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-gray-500">Absolute Error</span>
-          <span className="font-mono text-white">
-            ${point.absoluteError.toFixed(2)}
-          </span>
+          <span className="font-mono text-white">{formatCurrency(point.absoluteError)}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-gray-500">Prediction Count</span>
@@ -180,10 +204,22 @@ const AnalyticsTooltip = ({ active, payload, label }: any) => {
 const DEFAULT_ANALYTICS_START_DATE = "2026-01-01";
 const DEFAULT_ANALYTICS_END_DATE = "2026-03-17";
 
+type DashboardTab = "forecast" | "historical" | "analytics";
+type DashboardNotificationScope =
+  | "forecast"
+  | "historical"
+  | "analytics"
+  | "fan";
+
+const NOTIFICATION_SCOPE_TO_TAB: Record<DashboardNotificationScope, DashboardTab> = {
+  forecast: "forecast",
+  historical: "historical",
+  analytics: "analytics",
+  fan: "analytics",
+};
+
 function Dashboard() {
-  const [activeTab, setActiveTab] = useState<
-    "forecast" | "historical" | "analytics"
-  >("forecast");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("forecast");
   const [data, setData] = useState<PredictionResponse | null>(null);
   const [historicalData, setHistoricalData] =
     useState<HistoricalPricesResponse | null>(null);
@@ -206,6 +242,43 @@ function Dashboard() {
   const dateUtils = useDateUtils();
   // Guards against React StrictMode double-invocation firing the initial fetches twice.
   const initialFetchDone = useRef(false);
+  const pendingNotifications = useRef<
+    Partial<Record<DashboardNotificationScope, Parameters<typeof notify>[0]>>
+  >({});
+
+  const flushNotificationsForTab = useCallback(
+    (tab: DashboardTab) => {
+      const queuedScopes = Object.entries(pendingNotifications.current).filter(
+        ([scope]) =>
+          NOTIFICATION_SCOPE_TO_TAB[scope as DashboardNotificationScope] === tab,
+      ) as Array<[DashboardNotificationScope, Parameters<typeof notify>[0]]>;
+
+      if (!queuedScopes.length) return;
+
+      queuedScopes.forEach(([scope, notification]) => {
+        delete pendingNotifications.current[scope];
+        notify(notification);
+      });
+    },
+    [notify],
+  );
+
+  const notifyForTab = useCallback(
+    (scope: DashboardNotificationScope, notification: Parameters<typeof notify>[0]) => {
+      const targetTab = NOTIFICATION_SCOPE_TO_TAB[scope];
+      if (activeTab === targetTab) {
+        notify(notification);
+        return;
+      }
+
+      pendingNotifications.current[scope] = notification;
+    },
+    [activeTab, notify],
+  );
+
+  useEffect(() => {
+    flushNotificationsForTab(activeTab);
+  }, [activeTab, flushNotificationsForTab]);
 
   useEffect(() => {
     if (initialFetchDone.current) return;
@@ -225,7 +298,7 @@ function Dashboard() {
       setError(null);
       const result = await fetchPredictionsApi();
       setData(result);
-      notify({
+      notifyForTab("forecast", {
         type: "success",
         title: "Forecast loaded",
         message: `${result.forecasts.length} trading day${result.forecasts.length === 1 ? "" : "s"} of predictions ready`,
@@ -233,7 +306,11 @@ function Dashboard() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch predictions";
       setError(msg);
-      notify({ type: "error", title: "Forecast failed", message: msg });
+      notifyForTab("forecast", {
+        type: "error",
+        title: "Forecast failed",
+        message: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -243,14 +320,18 @@ function Dashboard() {
     try {
       const result = await fetchFanPredictionsApi();
       setFanData(result);
-      notify({
+      notifyForTab("fan", {
         type: "info",
         title: "Fan chart ready",
         message: `${result.fan.length} probabilistic data points loaded`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Fan chart data unavailable";
-      notify({ type: "warning", title: "Fan chart unavailable", message: msg });
+      notifyForTab("fan", {
+        type: "warning",
+        title: "Fan chart unavailable",
+        message: msg,
+      });
     }
   };
 
@@ -268,7 +349,7 @@ function Dashboard() {
           isFirstPage = false;
         }
         if (progress === 100) {
-          notify({
+          notifyForTab("historical", {
             type: "success",
             title: "Historical data ready",
             message: `${partial.total_records.toLocaleString()} records loaded (${dateUtils.formatRange(partial.date_range.start, partial.date_range.end)})`,
@@ -278,7 +359,11 @@ function Dashboard() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch historical prices";
       setHistoricalError(msg);
-      notify({ type: "error", title: "Historical data failed", message: msg });
+      notifyForTab("historical", {
+        type: "error",
+        title: "Historical data failed",
+        message: msg,
+      });
       setHistoricalLoading(false);
     }
   };
@@ -290,14 +375,22 @@ function Dashboard() {
     if (!startDate || !endDate) {
       const msg = "Select both a start and end date to load analytics";
       setAnalyticsError(msg);
-      notify({ type: "warning", title: "Analytics dates missing", message: msg });
+      notifyForTab("analytics", {
+        type: "warning",
+        title: "Analytics dates missing",
+        message: msg,
+      });
       return;
     }
 
     if (startDate > endDate) {
       const msg = "Start date must be earlier than or equal to end date";
       setAnalyticsError(msg);
-      notify({ type: "warning", title: "Invalid date range", message: msg });
+      notifyForTab("analytics", {
+        type: "warning",
+        title: "Invalid date range",
+        message: msg,
+      });
       return;
     }
 
@@ -306,10 +399,11 @@ function Dashboard() {
       setAnalyticsError(null);
       const result = await fetchPredictionComparisonApi(startDate, endDate);
       setAnalyticsData(result);
-      notify({
+      const comparedDays = result.metrics.compared_days ?? result.total_days_returned;
+      notifyForTab("analytics", {
         type: "success",
         title: "Analytics updated",
-        message: `${result.metrics.compared_days} compared day${result.metrics.compared_days === 1 ? "" : "s"} loaded`,
+        message: `${comparedDays} compared day${comparedDays === 1 ? "" : "s"} loaded`,
       });
     } catch (err) {
       const msg =
@@ -317,7 +411,11 @@ function Dashboard() {
           ? err.message
           : "Failed to fetch predicted vs actual comparison";
       setAnalyticsError(msg);
-      notify({ type: "error", title: "Analytics failed", message: msg });
+      notifyForTab("analytics", {
+        type: "error",
+        title: "Analytics failed",
+        message: msg,
+      });
     } finally {
       setAnalyticsLoading(false);
     }
@@ -538,10 +636,9 @@ function Dashboard() {
     predictionCount: item.prediction_count,
     rawDate: item.date,
   }));
-  const analyticsPriceValues = analyticsChartData.flatMap((item) => [
-    item.actualPrice,
-    item.predictedPrice,
-  ]);
+  const analyticsPriceValues = analyticsChartData.flatMap((item) =>
+    [item.actualPrice, item.predictedPrice].filter(isFiniteNumber),
+  );
   const analyticsMinPrice = analyticsPriceValues.length
     ? Math.min(...analyticsPriceValues)
     : 0;
@@ -1307,7 +1404,7 @@ function Dashboard() {
                     MAE
                   </div>
                   <div className="text-3xl font-bold text-oil-gold font-display">
-                    ${analyticsMetrics?.mae.toFixed(2) ?? "0.00"}
+                    {formatCurrency(analyticsMetrics?.mae)}
                   </div>
                   <div className="text-xs text-gray-500 mt-2">
                     Mean absolute error across the selected window
@@ -1324,7 +1421,7 @@ function Dashboard() {
                     RMSE
                   </div>
                   <div className="text-3xl font-bold text-emerald-300 font-display">
-                    ${analyticsMetrics?.rmse.toFixed(2) ?? "0.00"}
+                    {formatCurrency(analyticsMetrics?.rmse)}
                   </div>
                   <div className="text-xs text-gray-500 mt-2">
                     Penalizes larger misses more heavily
@@ -1341,7 +1438,7 @@ function Dashboard() {
                     MAPE
                   </div>
                   <div className="text-3xl font-bold text-oil-cyan font-display">
-                    {analyticsMetrics?.mape.toFixed(2) ?? "0.00"}%
+                    {formatFixed(analyticsMetrics?.mape)}%
                   </div>
                   <div className="text-xs text-gray-500 mt-2">
                     Average percentage deviation from actual prices
@@ -1402,7 +1499,9 @@ function Dashboard() {
                             analyticsMinPrice - analyticsPriceRange * 0.15,
                             analyticsMaxPrice + analyticsPriceRange * 0.15,
                           ]}
-                          tickFormatter={(value) => `$${value.toFixed(0)}`}
+                          tickFormatter={(value) =>
+                            formatCurrency(parseFiniteNumber(value), 0, "0")
+                          }
                         />
                         <Tooltip content={<AnalyticsTooltip />} />
                         <Line

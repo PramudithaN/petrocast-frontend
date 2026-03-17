@@ -60,22 +60,22 @@ export interface FanResponse {
 }
 
 export interface PredictionComparisonMetrics {
-  compared_days: number;
-  mae: number;
-  rmse: number;
-  mape: number;
+  compared_days: number | null;
+  mae: number | null;
+  rmse: number | null;
+  mape: number | null;
 }
 
 export interface PredictionComparisonPoint {
   date: string;
-  actual_price: number;
-  predicted_price: number;
-  predicted_price_median: number;
-  predicted_price_latest: number;
+  actual_price: number | null;
+  predicted_price: number | null;
+  predicted_price_median: number | null;
+  predicted_price_latest: number | null;
   prediction_count: number;
-  error: number;
-  abs_error: number;
-  abs_pct_error: number;
+  error: number | null;
+  abs_error: number | null;
+  abs_pct_error: number | null;
 }
 
 export interface PredictionComparisonResponse {

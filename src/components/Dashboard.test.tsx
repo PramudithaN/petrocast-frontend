@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Dashboard from './Dashboard';
 import { NotificationProvider } from '../context/NotificationContext';
@@ -7,6 +7,12 @@ import { DateConfigProvider } from '../context/DateConfigContext';
 // Set up fetch mock
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
+
+const getRequestUrl = (input: RequestInfo | URL): string => {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+};
 
 const mockPredictions = {
   success: true,
@@ -141,7 +147,7 @@ describe('Dashboard Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = getRequestUrl(input);
       if (url.includes('/predictions/fan')) {
         return Promise.resolve({
           ok: true,
@@ -185,6 +191,85 @@ describe('Dashboard Component', () => {
     
     await waitFor(() => {
         expect(mockFetch).toHaveBeenCalled();
+    });
+  });
+
+  it('defers hidden-tab toasts until the user opens that tab', async () => {
+    renderWithProviders();
+
+    expect(await screen.findByText('Forecast loaded')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    expect(screen.queryByText('Historical data ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics updated')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fan chart ready')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Historical Data' }));
+    expect(await screen.findByText('Historical data ready')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
+    expect(await screen.findByText('Analytics updated')).toBeInTheDocument();
+    expect(await screen.findByText('Fan chart ready')).toBeInTheDocument();
+  });
+
+  it('renders analytics safely when compare metrics contain nulls', async () => {
+    mockFetch.mockImplementation((input: RequestInfo | URL) => {
+      const url = getRequestUrl(input);
+      if (url.includes('/predictions/fan')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockFan),
+        });
+      }
+      if (url.includes('/historical/prices')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockHistorical),
+        });
+      }
+      if (url.includes('/predictions/compare')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockComparison,
+              metrics: {
+                compared_days: null,
+                mae: null,
+                rmse: null,
+                mape: null,
+              },
+              comparison: [
+                {
+                  ...mockComparison.comparison[0],
+                  actual_price: null,
+                  predicted_price: null,
+                  abs_error: null,
+                },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockPredictions),
+      });
+    });
+
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('$0.00')).toHaveLength(2);
+      expect(screen.getByText('1')).toBeInTheDocument();
     });
   });
 });
