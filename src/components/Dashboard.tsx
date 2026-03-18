@@ -71,6 +71,10 @@ const parseFiniteNumber = (value: unknown): number | null => {
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
+// Guard against backend sentinel/outlier values that should not be charted as prices.
+const isValidOilPrice = (value: unknown): value is number =>
+  isFiniteNumber(value) && value > 0 && value < 10000;
+
 const formatFixed = (
   value: number | null | undefined,
   digits = 2,
@@ -475,9 +479,13 @@ function Dashboard() {
 
   if (!data) return null;
 
+  const validForecasts = data.forecasts.filter((forecast) =>
+    isValidOilPrice(forecast.forecasted_price),
+  );
+
   const priceChange =
-    data.forecasts.length > 0
-      ? data.forecasts[0].forecasted_price - data.last_price
+    validForecasts.length > 0
+      ? validForecasts[0].forecasted_price - data.last_price
       : 0;
   const priceChangePercent =
     data.last_price > 0 ? (priceChange / data.last_price) * 100 : 0;
@@ -491,14 +499,14 @@ function Dashboard() {
       price: data.last_price,
       type: "Historical",
     },
-    ...data.forecasts.map((f) => ({
+    ...validForecasts.map((f) => ({
       date: dateUtils.format(f.date, "short"),
       price: f.forecasted_price,
       type: "Forecast",
     })),
   ];
 
-  const tableData = data.forecasts.map((forecast, index) => ({
+  const tableData = validForecasts.map((forecast, index) => ({
     ...forecast,
     key: index,
     changeFromCurrent: forecast.forecasted_price - data.last_price,
@@ -571,6 +579,7 @@ function Dashboard() {
   const minPrice = Math.min(...allPrices);
   const maxPrice = Math.max(...allPrices);
   const priceRange = maxPrice - minPrice;
+  const safePriceRange = priceRange > 0 ? priceRange : Math.max(maxPrice * 0.05, 1);
 
   const historicalChartData = (historicalData?.data ?? []).map((item) => ({
     date: dateUtils.format(item.date, "short"),
@@ -825,7 +834,7 @@ function Dashboard() {
                 </div>
                 <div className="text-3xl font-bold text-white font-display">
                   <CountUp
-                    end={data.forecasts.length}
+                    end={validForecasts.length}
                     duration={1}
                     preserveValue
                   />
@@ -899,10 +908,10 @@ function Dashboard() {
                     tickLine={false}
                     axisLine={false}
                     domain={[
-                      minPrice - priceRange * 0.3,
-                      maxPrice + priceRange * 0.3,
+                      minPrice - safePriceRange * 0.3,
+                      maxPrice + safePriceRange * 0.3,
                     ]}
-                    tickFormatter={(val) => `$${val}`}
+                    tickFormatter={(val) => formatCurrency(parseFiniteNumber(val), 2, "-")}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Area
