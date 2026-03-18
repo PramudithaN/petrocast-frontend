@@ -59,11 +59,6 @@ function UploadData() {
       setDownloadingTemplate(true);
       setError(null);
       await downloadExcelTemplate();
-      notify({
-        type: "success",
-        title: "Template downloaded",
-        message: "Excel template is ready for data entry",
-      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to download template";
       setError(msg);
@@ -113,11 +108,6 @@ function UploadData() {
       const result = await uploadExcelFile(file);
       setPredictions(result);
       setShowUploader(false);
-      notify({
-        type: "success",
-        title: "Predictions generated",
-        message: `${result.forecasts.length} trading day${result.forecasts.length === 1 ? "" : "s"} of predictions ready`,
-      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to upload file";
       setError(msg);

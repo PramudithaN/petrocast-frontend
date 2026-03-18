@@ -61,11 +61,6 @@ const News = () => {
       setArticles(result.articles);
       setFailedImages({});
       setCurrentPage(1);
-      notify({
-        type: "success",
-        title: "News updated",
-        message: `${result.articles.length} article${result.articles.length === 1 ? "" : "s"} loaded from ${result.dates.length} date${result.dates.length === 1 ? "" : "s"}`,
-      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to fetch news articles";
@@ -87,6 +82,7 @@ const News = () => {
 
     if (mode === "date") {
       if (!dateInput) {
+        setError("Pick a date first to filter articles.");
         notify({
           type: "warning",
           title: "Date required",
@@ -100,6 +96,7 @@ const News = () => {
 
     const parsedDays = Number(daysInput);
     if (!Number.isInteger(parsedDays) || parsedDays <= 0) {
+      setError("Days must be a positive whole number.");
       notify({
         type: "warning",
         title: "Invalid days value",

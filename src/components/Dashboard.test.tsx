@@ -194,27 +194,6 @@ describe('Dashboard Component', () => {
     });
   });
 
-  it('defers hidden-tab toasts until the user opens that tab', async () => {
-    renderWithProviders();
-
-    expect(await screen.findByText('Forecast loaded')).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(4);
-    });
-
-    expect(screen.queryByText('Historical data ready')).not.toBeInTheDocument();
-    expect(screen.queryByText('Analytics updated')).not.toBeInTheDocument();
-    expect(screen.queryByText('Fan chart ready')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Historical Data' }));
-    expect(await screen.findByText('Historical data ready')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
-    expect(await screen.findByText('Analytics updated')).toBeInTheDocument();
-    expect(await screen.findByText('Fan chart ready')).toBeInTheDocument();
-  });
-
   it('renders analytics safely when compare metrics contain nulls', async () => {
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = getRequestUrl(input);

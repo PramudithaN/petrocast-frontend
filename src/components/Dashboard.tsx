@@ -298,11 +298,6 @@ function Dashboard() {
       setError(null);
       const result = await fetchPredictionsApi();
       setData(result);
-      notifyForTab("forecast", {
-        type: "success",
-        title: "Forecast loaded",
-        message: `${result.forecasts.length} trading day${result.forecasts.length === 1 ? "" : "s"} of predictions ready`,
-      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch predictions";
       setError(msg);
@@ -348,13 +343,6 @@ function Dashboard() {
           setHistoricalLoading(false);
           isFirstPage = false;
         }
-        if (progress === 100) {
-          notifyForTab("historical", {
-            type: "success",
-            title: "Historical data ready",
-            message: `${partial.total_records.toLocaleString()} records loaded (${dateUtils.formatRange(partial.date_range.start, partial.date_range.end)})`,
-          });
-        }
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch historical prices";
@@ -399,12 +387,6 @@ function Dashboard() {
       setAnalyticsError(null);
       const result = await fetchPredictionComparisonApi(startDate, endDate);
       setAnalyticsData(result);
-      const comparedDays = result.metrics.compared_days ?? result.total_days_returned;
-      notifyForTab("analytics", {
-        type: "success",
-        title: "Analytics updated",
-        message: `${comparedDays} compared day${comparedDays === 1 ? "" : "s"} loaded`,
-      });
     } catch (err) {
       const msg =
         err instanceof Error
@@ -457,12 +439,6 @@ function Dashboard() {
     a.download = `brent-crude-historical-${startDateFormatted}-${endDateFormatted}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-
-    notify({
-      type: "success",
-      title: "Download started",
-      message: `${historicalData.total_records.toLocaleString()} records exported as CSV`,
-    });
   };
 
   const formatPrice = (price: number): string => price.toFixed(2);
@@ -892,10 +868,6 @@ function Dashboard() {
               <div className="flex items-center gap-4 text-xs">
                 <span className="flex items-center gap-1.5 text-gray-400">
                   <div className="w-2.5 h-2.5 rounded-full bg-oil-gold" />
-                  Actual
-                </span>
-                <span className="flex items-center gap-1.5 text-gray-400">
-                  <div className="w-2.5 h-2.5 rounded-full bg-oil-gold/40 border border-oil-gold/60" />
                   Forecast
                 </span>
               </div>
@@ -1263,10 +1235,18 @@ function Dashboard() {
                         tickFormatter={(val) => `${val}%`}
                       />
                       <Tooltip
-                        formatter={(value) => [
-                          `${Number(value ?? 0).toFixed(2)}%`,
-                          "Change",
-                        ]}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          const value = payload[0].value as number;
+                          return (
+                            <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[180px]">
+                              <p className="text-xs text-gray-400 mb-2">{label}</p>
+                              <p className="text-lg font-bold text-oil-gold mb-1">
+                                Change : {Number(value ?? 0).toFixed(2)}%
+                              </p>
+                            </div>
+                          );
+                        }}
                       />
                       <Bar
                         dataKey="changePct"
