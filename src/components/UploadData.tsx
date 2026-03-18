@@ -110,11 +110,13 @@ function UploadData() {
       setShowUploader(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to upload file";
+      const detail = (err as any)?.detail || "";
       setError(msg);
       notify({
         type: "error",
         title: "Upload failed",
         message: msg,
+        detail: detail || undefined,
       });
     } finally {
       setLoading(false);

@@ -22,6 +22,8 @@ export interface NotificationOptions {
   type: NotificationType;
   title: string;
   message?: string;
+  /** Detailed error message to display below message */
+  detail?: string;
   /** Auto-dismiss delay in ms. Default 4000. Pass 0 to disable. */
   duration?: number;
 }
@@ -103,6 +105,11 @@ function Toast({ item, onDismiss }: ToastProps) {
         {item.message && (
           <p className="text-xs text-gray-400 mt-0.5 leading-relaxed line-clamp-2">
             {item.message}
+          </p>
+        )}
+        {item.detail && (
+          <p className="text-xs text-gray-300 mt-1.5 leading-relaxed line-clamp-3 font-mono">
+            {item.detail}
           </p>
         )}
       </div>

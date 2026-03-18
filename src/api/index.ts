@@ -467,12 +467,31 @@ export const uploadExcelFile = async (file: File): Promise<PredictionResponse> =
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      let errorDetail = "";
+      try {
+        const errorPayload = await response.json();
+        if (isRecord(errorPayload) && isRecord(errorPayload.error)) {
+          errorDetail = toStringOrDefault(errorPayload.error.detail);
+        } else if (isRecord(errorPayload)) {
+          errorDetail = toStringOrDefault(errorPayload.message || errorPayload.detail);
+        }
+      } catch {
+        // Failed to parse error response body
+      }
+      const error = new Error(errorDetail || `HTTP error! status: ${response.status}`);
+      (error as any).detail = errorDetail;
+      throw error;
     }
 
     const payload = await response.json();
     return normalizePredictionResponse(payload);
   } catch (error) {
-    throw new Error(`Error uploading file: ${error instanceof Error ? error.message : "Unknown error"}`);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const detail = (error as any)?.detail || "";
+    // If detail exists, use simple message to avoid duplication
+    const finalMessage = detail ? "Upload failed" : `Error uploading file: ${message}`;
+    const err = new Error(finalMessage);
+    (err as any).detail = detail || message;
+    throw err;
   }
 };
