@@ -13,6 +13,8 @@ const FAN_API_URL = `${BASE_API_URL}/predictions/fan`;
 const COMPARE_API_URL = `${BASE_API_URL}/predictions/compare`;
 const HISTORICAL_API_URL = `${BASE_API_URL}/historical/prices`;
 const NEWS_API_URL = `${BASE_API_URL}/news`;
+const UPLOAD_EXCEL_API_URL = `${BASE_API_URL}/predict/upload-excel`;
+const UPLOAD_EXCEL_TEMPLATE_URL = `${BASE_API_URL}/predict/upload-excel/template`;
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
 const EMPTY_DATE_RANGE = { start: "", end: "" };
 
@@ -424,4 +426,53 @@ export const fetchHistoricalPricesProgressive = async (
   const finalResult = buildHistoricalResult(allRows, firstPage);
   onProgress(finalResult, 100);
   return finalResult;
+};
+
+/**
+ * Downloads the Excel template for uploading custom data
+ */
+export const downloadExcelTemplate = async (): Promise<void> => {
+  try {
+    const response = await fetch(UPLOAD_EXCEL_TEMPLATE_URL);
+
+    if (!response.ok) {
+      throw new Error(`Failed to download template: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "oil_price_template.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    throw new Error(`Error downloading template: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+};
+
+/**
+ * Uploads an Excel file and returns predictions
+ */
+export const uploadExcelFile = async (file: File): Promise<PredictionResponse> => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(UPLOAD_EXCEL_API_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return normalizePredictionResponse(payload);
+  } catch (error) {
+    throw new Error(`Error uploading file: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
 };

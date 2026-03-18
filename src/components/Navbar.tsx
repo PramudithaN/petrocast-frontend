@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AreaChart, Home, Info, Menu, Newspaper, X } from "lucide-react";
+import { AreaChart, Home, Info, Menu, Newspaper, X, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 import AnimatedButton from "./ui/AnimatedButton";
 
@@ -22,6 +22,7 @@ const Navbar = () => {
   const navItems = [
     { title: "Home", path: "/", icon: <Home size={18} /> },
     { title: "Dashboard", path: "/dashboard", icon: <AreaChart size={18} /> },
+    { title: "Upload", path: "/upload", icon: <Upload size={18} /> },
     { title: "News", path: "/news", icon: <Newspaper size={18} /> },
     { title: "About", path: "/about", icon: <Info size={18} /> },
   ];
