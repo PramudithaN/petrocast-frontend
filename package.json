@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@vercel/speed-insights": "^2.0.0",
     "antd": "^6.2.2",
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.575.0",
