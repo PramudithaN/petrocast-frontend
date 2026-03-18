@@ -47,7 +47,7 @@ const MetricsSection = () => {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
       <MetricCard
         label="Forecast Days"
-        value={5}
+        value={14}
         suffix=""
         icon={<TrendingUp size={20} />}
       />

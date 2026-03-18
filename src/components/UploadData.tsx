@@ -124,6 +124,8 @@ function UploadData() {
   const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    if (loading) return;
+
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
     } else if (e.type === "dragleave") {
@@ -134,6 +136,8 @@ function UploadData() {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    if (loading) return;
+
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
@@ -151,6 +155,7 @@ function UploadData() {
   };
 
   const handleUploadClick = () => {
+    if (loading) return;
     fileInputRef.current?.click();
   };
 
@@ -207,7 +212,7 @@ function UploadData() {
           </p>
         </div>
 
-        <div className="w-full md:w-auto md:pt-1 flex items-center gap-3 justify-end">
+        <div className="w-full md:w-auto md:self-end flex items-center gap-3 justify-end">
           {predictions ? (
             <button
               type="button"
@@ -308,6 +313,31 @@ function UploadData() {
               : "border-white/10 hover:border-oil-gold/40"
           }`}
         >
+          {loading ? (
+            <div className="absolute inset-0 z-20 grid place-items-center bg-black/65 backdrop-blur-sm px-6">
+              <div className="w-full max-w-md text-center">
+                <p className="text-white font-semibold text-base md:text-lg">
+                  Uploading file...
+                </p>
+                <p className="mt-1 text-xs md:text-sm text-gray-300 break-all">
+                  {selectedFileName || "Preparing your Excel data"}
+                </p>
+
+                <div className="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-white/10 border border-white/10">
+                  <motion.div
+                    className="h-full w-1/2 rounded-full bg-gradient-to-r from-oil-gold via-oil-amber to-oil-gold"
+                    animate={{ x: ["-120%", "220%"] }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                </div>
+
+                <p className="mt-3 text-xs text-oil-light-gold/90" aria-live="polite">
+                  Please wait while we process your upload.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(245,158,11,0.18),rgba(14,12,10,0.9)_45%),linear-gradient(120deg,rgba(255,255,255,0.03),rgba(255,255,255,0.0)_35%)]" />
           <motion.div
             animate={{

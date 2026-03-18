@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pagination } from "antd";
 import { motion } from "framer-motion";
 import {
@@ -12,6 +12,45 @@ import { fetchNews } from "../api";
 import { NewsArticle } from "../types/api";
 import AnimatedButton from "./ui/AnimatedButton";
 import { useNotification } from "../context/NotificationContext";
+
+// Preload an image URL by creating an in-memory Image object
+const preloadImage = (src: string) => {
+  const img = new Image();
+  img.src = src;
+};
+
+// Per-image component that shows a skeleton while loading and fades in on load
+const NewsImage = ({
+  src,
+  alt,
+  articleId,
+  onError,
+}: {
+  src: string;
+  alt: string;
+  articleId: string | number;
+  onError: (id: string | number) => void;
+}) => {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <>
+      {!loaded && (
+        <div className="absolute inset-0 bg-oil-dark/80 animate-pulse" />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onLoad={() => setLoaded(true)}
+        onError={() => onError(articleId)}
+      />
+    </>
+  );
+};
 
 type Mode = "recent" | "date";
 const ARTICLES_PER_PAGE = 6;
@@ -52,6 +91,21 @@ const News = () => {
     const end = start + ARTICLES_PER_PAGE;
     return articles.slice(start, end);
   }, [articles, currentPage]);
+
+  // Preload next page images in the background for instant display when user navigates
+  useEffect(() => {
+    const nextStart = currentPage * ARTICLES_PER_PAGE;
+    const nextPageArticles = articles.slice(nextStart, nextStart + ARTICLES_PER_PAGE);
+    nextPageArticles.forEach((article) => {
+      if (article.image_url && !failedImages[article.id]) {
+        preloadImage(article.image_url);
+      }
+    });
+  }, [currentPage, articles, failedImages]);
+
+  const handleImageError = useCallback((id: string | number) => {
+    setFailedImages((current) => ({ ...current, [id]: true }));
+  }, []);
 
   const loadNews = async (options?: { days?: number; articleDate?: string }) => {
     try {
@@ -261,18 +315,11 @@ const News = () => {
                 >
                   <div className="relative overflow-hidden rounded-xl h-44 bg-oil-dark/80 border border-white/10">
                     {article.image_url && !failedImages[article.id] ? (
-                      <img
+                      <NewsImage
                         src={article.image_url}
                         alt={article.title}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={() =>
-                          setFailedImages((current) => ({
-                            ...current,
-                            [article.id]: true,
-                          }))
-                        }
+                        articleId={article.id}
+                        onError={handleImageError}
                       />
                     ) : (
                       <div className="h-full w-full bg-gradient-to-br from-oil-gold/20 via-oil-gold/5 to-oil-dark flex items-center justify-center">
