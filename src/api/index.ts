@@ -7,7 +7,7 @@ import {
   PredictionResponse,
 } from "../types/api";
 
-const BASE_API_URL = "https://pramudithan-oil-price-prediction.hf.space";
+const BASE_API_URL = import.meta.env.VITE_API_BASE_URL as string;
 const PREDICTION_API_URL = `${BASE_API_URL}/predict`;
 const FAN_API_URL = `${BASE_API_URL}/predictions/fan`;
 const COMPARE_API_URL = `${BASE_API_URL}/predictions/compare`;
