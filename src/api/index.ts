@@ -54,16 +54,34 @@ const toStringOrNull = (value: unknown): string | null =>
 const toStringOrDefault = (value: unknown, fallback = ""): string =>
   toStringOrNull(value) ?? fallback;
 
-const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
+const unwrapRecordPayload = (
+  payload: unknown,
+): { root: Record<string, unknown>; response: Record<string, unknown> } => {
   const root = isRecord(payload) ? payload : {};
-  const response = isRecord(root.data) ? root.data : root;
+  const nested = root.data;
+  const response = isRecord(nested) && !Array.isArray(nested) ? nested : root;
+  return { root, response };
+};
+
+const resolveSuccessFlag = (
+  root: Record<string, unknown>,
+  response: Record<string, unknown>,
+): boolean => {
+  if (typeof root.success === "boolean") {
+    return root.success;
+  }
+
+  if (typeof response.success === "boolean") {
+    return response.success;
+  }
+
+  return true;
+};
+
+const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
+  const { root, response } = unwrapRecordPayload(payload);
   const rawForecasts = Array.isArray(response.forecasts) ? response.forecasts : [];
-  const success =
-    typeof root.success === "boolean"
-      ? root.success
-      : typeof response.success === "boolean"
-        ? response.success
-        : true;
+  const success = resolveSuccessFlag(root, response);
 
   const forecasts = rawForecasts
     .map((item, index) => {
@@ -97,7 +115,7 @@ const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
 };
 
 const normalizeFanResponse = (payload: unknown): FanResponse => {
-  const response = isRecord(payload) ? payload : {};
+  const { root, response } = unwrapRecordPayload(payload);
   const lastPrice = toFiniteNumberOrDefault(response.last_price);
   const rawFan = Array.isArray(response.fan) ? response.fan : [];
 
@@ -123,7 +141,7 @@ const normalizeFanResponse = (payload: unknown): FanResponse => {
     .filter((point): point is FanResponse["fan"][number] => point !== null);
 
   return {
-    success: typeof response.success === "boolean" ? response.success : true,
+    success: resolveSuccessFlag(root, response),
     last_price_date: toStringOrDefault(response.last_price_date),
     last_price: lastPrice,
     fan,
@@ -157,7 +175,7 @@ const normalizeHistoricalResponse = (
   payload: unknown,
   fallbackLimit = DEFAULT_HISTORICAL_PAGE_LIMIT,
 ): HistoricalPricesResponse => {
-  const response = isRecord(payload) ? payload : {};
+  const { root, response } = unwrapRecordPayload(payload);
   const rawDateRange = isRecord(response.date_range) ? response.date_range : {};
   const data = (Array.isArray(response.data) ? response.data : [])
     .map((item) => normalizeHistoricalRow(item))
@@ -173,7 +191,7 @@ const normalizeHistoricalResponse = (
   };
 
   return {
-    success: typeof response.success === "boolean" ? response.success : true,
+    success: resolveSuccessFlag(root, response),
     granularity: toStringOrDefault(response.granularity, "daily"),
     total_available: toIntegerOrZero(response.total_available) || data.length,
     total_records: toIntegerOrZero(response.total_records) || data.length,
@@ -209,7 +227,7 @@ export const fetchFanPredictions = async (): Promise<FanResponse> =>
 const normalizePredictionComparisonResponse = (
   payload: unknown,
 ): PredictionComparisonResponse => {
-  const response = isRecord(payload) ? payload : {};
+  const { root, response } = unwrapRecordPayload(payload);
   const rawMetrics = isRecord(response.metrics) ? response.metrics : {};
   const rawComparison = Array.isArray(response.comparison)
     ? response.comparison
@@ -237,7 +255,7 @@ const normalizePredictionComparisonResponse = (
   const totalDaysReturned = toIntegerOrZero(response.total_days_returned);
 
   return {
-    success: typeof response.success === "boolean" ? response.success : true,
+    success: resolveSuccessFlag(root, response),
     start_date: toStringOrNull(response.start_date) ?? undefined,
     end_date: toStringOrNull(response.end_date) ?? "",
     total_days_returned: totalDaysReturned || comparison.length,
@@ -272,6 +290,54 @@ export interface FetchNewsOptions {
   days?: number;
   articleDate?: string;
 }
+
+export interface FetchNewsRequestOptions {
+  forceRefresh?: boolean;
+}
+
+interface NewsCacheEntry {
+  data: NewsResponse;
+  timestamp: number;
+}
+
+const NEWS_CACHE_TTL_MS = 5 * 60 * 1000;
+const newsResponseCache = new Map<string, NewsCacheEntry>();
+const newsInFlightRequests = new Map<string, Promise<NewsResponse>>();
+
+const buildNewsCacheKey = (options?: FetchNewsOptions): string => {
+  if (options?.articleDate) {
+    return `articleDate:${options.articleDate}`;
+  }
+
+  if (typeof options?.days === "number") {
+    return `days:${options.days}`;
+  }
+
+  return "default";
+};
+
+const getFreshNewsCacheEntry = (options?: FetchNewsOptions): NewsCacheEntry | null => {
+  const entry = newsResponseCache.get(buildNewsCacheKey(options));
+
+  if (!entry) {
+    return null;
+  }
+
+  if (Date.now() - entry.timestamp > NEWS_CACHE_TTL_MS) {
+    newsResponseCache.delete(buildNewsCacheKey(options));
+    return null;
+  }
+
+  return entry;
+};
+
+export const getCachedNews = (options?: FetchNewsOptions): NewsResponse | null =>
+  newsResponseCache.get(buildNewsCacheKey(options))?.data ?? null;
+
+export const clearNewsCache = (): void => {
+  newsResponseCache.clear();
+  newsInFlightRequests.clear();
+};
 
 const toNewsArticle = (item: unknown, index: number): NewsArticle => {
   const row = isRecord(item) ? item : {};
@@ -312,10 +378,28 @@ const normalizeNewsResponse = (payload: unknown): NewsResponse => {
   if (Array.isArray(payload)) {
     rawArticles = payload;
   } else if (isRecord(payload)) {
-    success = typeof payload.success === "boolean" ? payload.success : true;
-    const candidates = [payload.articles, payload.data, payload.results];
-    const listCandidate = candidates.find((candidate) => Array.isArray(candidate));
-    rawArticles = Array.isArray(listCandidate) ? listCandidate : [];
+    const root = payload;
+    const nested = root.data;
+    const nestedRecord = isRecord(nested) ? nested : null;
+
+    success = resolveSuccessFlag(root, nestedRecord ?? root);
+
+    if (Array.isArray(nested)) {
+      rawArticles = nested;
+    } else {
+      const containers = [root, nestedRecord].filter(
+        (container): container is Record<string, unknown> => Boolean(container),
+      );
+
+      for (const container of containers) {
+        const candidates = [container.articles, container.data, container.results];
+        const listCandidate = candidates.find((candidate) => Array.isArray(candidate));
+        if (Array.isArray(listCandidate)) {
+          rawArticles = listCandidate;
+          break;
+        }
+      }
+    }
   }
 
   const articles = rawArticles.map((item, index) => toNewsArticle(item, index));
@@ -336,7 +420,23 @@ const normalizeNewsResponse = (payload: unknown): NewsResponse => {
 
 export const fetchNews = async (
   options?: FetchNewsOptions,
+  requestOptions?: FetchNewsRequestOptions,
 ): Promise<NewsResponse> => {
+  const cacheKey = buildNewsCacheKey(options);
+  const useCache = !requestOptions?.forceRefresh;
+
+  if (useCache) {
+    const cachedEntry = getFreshNewsCacheEntry(options);
+    if (cachedEntry) {
+      return cachedEntry.data;
+    }
+
+    const inFlightRequest = newsInFlightRequests.get(cacheKey);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+  }
+
   const params = new URLSearchParams();
 
   if (options?.articleDate) {
@@ -347,8 +447,21 @@ export const fetchNews = async (
 
   const query = params.toString();
   const url = query ? `${NEWS_API_URL}?${query}` : NEWS_API_URL;
-  const payload = await fetchJson<unknown>(url);
-  return normalizeNewsResponse(payload);
+  const request = fetchJson<unknown>(url)
+    .then((payload) => normalizeNewsResponse(payload))
+    .then((result) => {
+      newsResponseCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+      return result;
+    })
+    .finally(() => {
+      newsInFlightRequests.delete(cacheKey);
+    });
+
+  newsInFlightRequests.set(cacheKey, request);
+  return request;
 };
 
 const buildHistoricalResult = (

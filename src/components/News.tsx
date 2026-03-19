@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
-import { fetchNews } from "../api";
+import { fetchNews, FetchNewsOptions, getCachedNews } from "../api";
 import { NewsArticle } from "../types/api";
 import AnimatedButton from "./ui/AnimatedButton";
 import { useNotification } from "../context/NotificationContext";
@@ -68,9 +68,11 @@ const formatArticleDate = (dateString: string) => {
   }).format(date);
 };
 
+const initialCachedNews = getCachedNews();
+
 const News = () => {
-  const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [articles, setArticles] = useState<NewsArticle[]>(() => initialCachedNews?.articles ?? []);
+  const [loading, setLoading] = useState(() => !initialCachedNews);
   const [error, setError] = useState<string | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [mode, setMode] = useState<Mode>("recent");
@@ -107,11 +109,26 @@ const News = () => {
     setFailedImages((current) => ({ ...current, [id]: true }));
   }, []);
 
-  const loadNews = async (options?: { days?: number; articleDate?: string }) => {
+  const loadNews = async (
+    options?: FetchNewsOptions,
+    requestOptions?: { forceRefresh?: boolean },
+  ) => {
+    const cachedNews = requestOptions?.forceRefresh ? null : getCachedNews(options);
+
     try {
-      setLoading(true);
+      if (cachedNews) {
+        setArticles(cachedNews.articles);
+        setFailedImages({});
+        setCurrentPage(1);
+        setError(null);
+        setLoading(false);
+      } else {
+        setLoading(true);
+        setError(null);
+      }
+
       setError(null);
-      const result = await fetchNews(options);
+      const result = await fetchNews(options, requestOptions);
       setArticles(result.articles);
       setFailedImages({});
       setCurrentPage(1);
@@ -121,7 +138,9 @@ const News = () => {
       setError(message);
       notify({ type: "error", title: "News fetch failed", message });
     } finally {
-      setLoading(false);
+      if (!cachedNews || requestOptions?.forceRefresh) {
+        setLoading(false);
+      }
     }
   };
 

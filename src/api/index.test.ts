@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearNewsCache,
   fetchFanPredictions,
   fetchHistoricalPrices,
   fetchNews,
@@ -13,6 +14,7 @@ globalThis.fetch = mockFetch;
 describe('api response normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearNewsCache();
   });
 
   it('normalizes nullish prediction payloads', async () => {
@@ -158,6 +160,52 @@ describe('api response normalization', () => {
     ]);
   });
 
+  it('normalizes fan payload nested under data', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: {
+            last_price_date: '2026-03-19',
+            last_price: 72.9,
+            fan: [
+              {
+                date: '2026-03-20',
+                point_forecast: 73.1,
+                p10: 72,
+                p25: 72.5,
+                p50: 73.1,
+                p75: 73.8,
+                p90: 74.2,
+                sample_count: 120,
+              },
+            ],
+          },
+        }),
+    });
+
+    const result = await fetchFanPredictions();
+
+    expect(result).toEqual({
+      success: true,
+      last_price_date: '2026-03-19',
+      last_price: 72.9,
+      fan: [
+        {
+          date: '2026-03-20',
+          point_forecast: 73.1,
+          p10: 72,
+          p25: 72.5,
+          p50: 73.1,
+          p75: 73.8,
+          p90: 74.2,
+          sample_count: 120,
+        },
+      ],
+    });
+  });
+
   it('normalizes nullish historical payloads', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -217,6 +265,49 @@ describe('api response normalization', () => {
           source: 'unknown',
         },
       ],
+    });
+  });
+
+  it('normalizes historical payload nested under data', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: {
+            granularity: 'daily',
+            total_available: 1,
+            total_records: 1,
+            limit: 100,
+            offset: 0,
+            date_range: {
+              start: '2026-03-18',
+              end: '2026-03-18',
+            },
+            data: [
+              {
+                date: '2026-03-18',
+                price: 72.8,
+                open: 72.1,
+                high: 73,
+                low: 71.9,
+                volume: 1000,
+                change_pct: 1.1,
+                source: 'api-v2',
+              },
+            ],
+          },
+        }),
+    });
+
+    const result = await fetchHistoricalPrices(100);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].source).toBe('api-v2');
+    expect(result.date_range).toEqual({
+      start: '2026-03-18',
+      end: '2026-03-18',
     });
   });
 
@@ -286,6 +377,70 @@ describe('api response normalization', () => {
     });
   });
 
+  it('normalizes comparison payload nested under data', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: {
+            start_date: '2026-03-01',
+            end_date: '2026-03-10',
+            total_days_returned: 1,
+            aggregation_strategy: 'median',
+            metrics: {
+              compared_days: 1,
+              mae: 0.5,
+              rmse: 0.6,
+              mape: 0.7,
+            },
+            comparison: [
+              {
+                date: '2026-03-10',
+                actual_price: 73,
+                predicted_price: 72.8,
+                predicted_price_median: 72.9,
+                predicted_price_latest: 72.7,
+                prediction_count: 3,
+                error: -0.2,
+                abs_error: 0.2,
+                abs_pct_error: 0.27,
+              },
+            ],
+          },
+        }),
+    });
+
+    const result = await fetchPredictionComparison('2026-03-01', '2026-03-10');
+
+    expect(result).toEqual({
+      success: true,
+      start_date: '2026-03-01',
+      end_date: '2026-03-10',
+      total_days_returned: 1,
+      aggregation_strategy: 'median',
+      metrics: {
+        compared_days: 1,
+        mae: 0.5,
+        rmse: 0.6,
+        mape: 0.7,
+      },
+      comparison: [
+        {
+          date: '2026-03-10',
+          actual_price: 73,
+          predicted_price: 72.8,
+          predicted_price_median: 72.9,
+          predicted_price_latest: 72.7,
+          prediction_count: 3,
+          error: -0.2,
+          abs_error: 0.2,
+          abs_pct_error: 0.27,
+        },
+      ],
+    });
+  });
+
   it('normalizes news payloads with missing fields', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -325,5 +480,113 @@ describe('api response normalization', () => {
       ],
       dates: [],
     });
+  });
+
+  it('normalizes news payload nested under data.articles', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: {
+            articles: [
+              {
+                id: 'article-1',
+                title: 'Market Update',
+                summary: 'Brent rises',
+                source: 'Reuters',
+                url: 'https://example.com',
+                image_url: 'https://example.com/image.jpg',
+                article_date: '2026-03-19',
+                published_at: '2026-03-19T09:00:00Z',
+              },
+            ],
+          },
+        }),
+    });
+
+    const result = await fetchNews();
+
+    expect(result.success).toBe(true);
+    expect(result.articles).toHaveLength(1);
+    expect(result.articles[0].title).toBe('Market Update');
+    expect(result.dates).toEqual(['2026-03-19']);
+  });
+
+  it('reuses cached news responses for identical requests', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          articles: [
+            {
+              id: 'cached-article',
+              title: 'Cached headline',
+              article_date: '2026-03-19',
+            },
+          ],
+        }),
+    });
+
+    const firstResult = await fetchNews({ days: 9 });
+    const secondResult = await fetchNews({ days: 9 });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(secondResult).toEqual(firstResult);
+  });
+
+  it('deduplicates in-flight news requests and refreshes on demand', async () => {
+    let resolveFirstRequest: ((value: unknown) => void) | undefined;
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        new Promise((resolve) => {
+          resolveFirstRequest = resolve;
+        }),
+    });
+
+    const firstRequest = fetchNews({ days: 12 });
+    const secondRequest = fetchNews({ days: 12 });
+
+    await Promise.resolve();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    resolveFirstRequest?.({
+      success: true,
+      articles: [
+        {
+          id: 'first-version',
+          title: 'First version',
+          article_date: '2026-03-18',
+        },
+      ],
+    });
+
+    const [firstResult, secondResult] = await Promise.all([firstRequest, secondRequest]);
+
+    expect(firstResult).toEqual(secondResult);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          articles: [
+            {
+              id: 'refreshed-version',
+              title: 'Refreshed version',
+              article_date: '2026-03-19',
+            },
+          ],
+        }),
+    });
+
+    const refreshedResult = await fetchNews({ days: 12 }, { forceRefresh: true });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(refreshedResult.articles[0].title).toBe('Refreshed version');
   });
 });
