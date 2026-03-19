@@ -490,7 +490,7 @@ function Dashboard() {
   const priceChangePercent =
     data.last_price > 0 ? (priceChange / data.last_price) * 100 : 0;
   const isPositive = priceChange >= 0;
-  const isMarketRunning = data.market_state?.toUpperCase() === "TRADING_DAY";
+  const isMarketRunning = data.is_market_open ?? false;
 
   // Chart data
   const chartData = [
@@ -505,7 +505,7 @@ function Dashboard() {
       type: "Forecast",
     })),
   ];
-
+  
   const tableData = validForecasts.map((forecast, index) => ({
     ...forecast,
     key: index,
@@ -683,7 +683,7 @@ function Dashboard() {
                     : "bg-red-400"
                 }`}
               />
-              {isMarketRunning ? "Running" : "Closed"}
+              {isMarketRunning ? "Open" : "Closed"}
             </span>
           </p>
         </div>

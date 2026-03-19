@@ -55,8 +55,15 @@ const toStringOrDefault = (value: unknown, fallback = ""): string =>
   toStringOrNull(value) ?? fallback;
 
 const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
-  const response = isRecord(payload) ? payload : {};
+  const root = isRecord(payload) ? payload : {};
+  const response = isRecord(root.data) ? root.data : root;
   const rawForecasts = Array.isArray(response.forecasts) ? response.forecasts : [];
+  const success =
+    typeof root.success === "boolean"
+      ? root.success
+      : typeof response.success === "boolean"
+        ? response.success
+        : true;
 
   const forecasts = rawForecasts
     .map((item, index) => {
@@ -75,12 +82,17 @@ const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
     .filter((forecast): forecast is PredictionResponse["forecasts"][number] => forecast !== null);
 
   return {
-    success: typeof response.success === "boolean" ? response.success : true,
+    success,
     data_source: toStringOrDefault(response.data_source, "unknown"),
     last_price_date: toStringOrDefault(response.last_price_date),
     last_price: toFiniteNumberOrDefault(response.last_price),
     forecasts,
     market_state: toStringOrDefault(response.market_state, "UNKNOWN"),
+    is_market_open:
+      typeof response.is_market_open === "boolean" ? response.is_market_open : false,
+    market_open_time: toStringOrNull(response.market_open_time) ?? undefined,
+    market_close_time: toStringOrNull(response.market_close_time) ?? undefined,
+    timezone_info: toStringOrNull(response.timezone_info) ?? undefined,
   };
 };
 
@@ -173,7 +185,13 @@ const normalizeHistoricalResponse = (
 };
 
 const fetchJson = async <T>(url: string): Promise<T> => {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);

@@ -48,11 +48,65 @@ describe('api response normalization', () => {
       last_price_date: '',
       last_price: 0,
       market_state: 'UNKNOWN',
+      is_market_open: false,
+      market_open_time: undefined,
+      market_close_time: undefined,
+      timezone_info: undefined,
       forecasts: [
         {
           date: '2026-03-18',
           forecasted_price: 0,
           forecasted_return: 0,
+          horizon: 1,
+        },
+      ],
+    });
+  });
+
+  it('normalizes updated prediction payloads nested under data', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: {
+            data_source: 'api-v2',
+            last_price_date: '2026-03-19',
+            last_price: 72.4,
+            market_state: 'STABLE',
+            is_market_open: true,
+            market_open_time: '09:00',
+            market_close_time: '17:00',
+            timezone_info: 'UTC',
+            forecasts: [
+              {
+                date: '2026-03-20',
+                forecasted_price: 73.2,
+                forecasted_return: 0.01,
+                horizon: 1,
+              },
+            ],
+          },
+        }),
+    });
+
+    const result = await fetchPredictions();
+
+    expect(result).toEqual({
+      success: true,
+      data_source: 'api-v2',
+      last_price_date: '2026-03-19',
+      last_price: 72.4,
+      market_state: 'STABLE',
+      is_market_open: true,
+      market_open_time: '09:00',
+      market_close_time: '17:00',
+      timezone_info: 'UTC',
+      forecasts: [
+        {
+          date: '2026-03-20',
+          forecasted_price: 73.2,
+          forecasted_return: 0.01,
           horizon: 1,
         },
       ],

@@ -12,6 +12,10 @@ export interface PredictionResponse {
   last_price: number;
   forecasts: Forecast[];
   market_state: string;
+  is_market_open: boolean;
+  market_open_time?: string;
+  market_close_time?: string;
+  timezone_info?: string;
 }
 
 export interface HistoricalPricePoint {
