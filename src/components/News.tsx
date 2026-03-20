@@ -237,7 +237,7 @@ const News = () => {
                   onChange={() => setMode("recent")}
                   className="accent-oil-gold"
                 />
-                Most recent distinct dates
+                <span>Most recent distinct dates</span>
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
                 <input
@@ -248,7 +248,7 @@ const News = () => {
                   onChange={() => setMode("date")}
                   className="accent-oil-gold"
                 />
-                Exact date
+                <span>Exact date</span>
               </label>
             </div>
 
@@ -307,13 +307,15 @@ const News = () => {
           </div>
         )}
 
-        {loading ? (
+        {loading && (
           <div className="grid md:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((key) => (
               <div key={key} className="h-48 rounded-2xl bg-white/5 animate-pulse" />
             ))}
           </div>
-        ) : articles.length === 0 ? (
+        )}
+
+        {!loading && articles.length === 0 && (
           <div className="glass-strong rounded-2xl p-10 border border-white/10 text-center">
             <Newspaper className="mx-auto text-gray-500" size={36} />
             <p className="mt-3 text-white font-semibold">No articles found</p>
@@ -321,7 +323,9 @@ const News = () => {
               Try a different date filter or reset to the default latest feed.
             </p>
           </div>
-        ) : (
+        )}
+
+        {!loading && articles.length > 0 && (
           <div className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
               {pagedArticles.map((article, index) => (

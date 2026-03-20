@@ -128,7 +128,7 @@ export const dateUtils = {
    */
   formatDate: (date: string | Date, locale = "en-US") => {
     const dateObj = typeof date === "string" ? new Date(date) : date;
-    if (isNaN(dateObj.getTime())) return "Invalid Date";
+    if (Number.isNaN(dateObj.getTime())) return "Invalid Date";
     return dateObj.toLocaleDateString(locale, {
       year: "numeric",
       month: "short",
@@ -143,7 +143,7 @@ export const dateUtils = {
     const start = typeof startDate === "string" ? new Date(startDate) : startDate;
     const end = typeof endDate === "string" ? new Date(endDate) : endDate;
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return "Invalid Date Range";
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Invalid Date Range";
 
     const startStr = start.toLocaleDateString(locale, {
       year: "numeric",

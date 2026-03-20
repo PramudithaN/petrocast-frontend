@@ -42,7 +42,24 @@ const formatCurrency = (
   fallback = "0.00",
 ): string => `$${formatFixed(value, digits, fallback)}`;
 
-function UploadData() {
+function validateFileType(file: File): string | null {
+  if (
+    !file.name.endsWith(".xlsx") &&
+    !file.name.endsWith(".xls") &&
+    !file.type.includes("spreadsheet")
+  ) {
+    return "Please upload an Excel file (.xlsx or .xls)";
+  }
+  return null;
+}
+
+function validateFileSize(file: File): string | null {
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) return "File size must be less than 10MB";
+  return null;
+}
+
+function useFileUpload() {
   const [predictions, setPredictions] = useState<PredictionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
@@ -52,7 +69,6 @@ function UploadData() {
   const [showUploader, setShowUploader] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { notify } = useNotification();
-  const dateUtils = useDateUtils();
 
   const handleDownloadTemplate = async () => {
     try {
@@ -73,32 +89,17 @@ function UploadData() {
   };
 
   const handleFileUpload = async (file: File) => {
-    // Validate file type
-    if (
-      !file.name.endsWith(".xlsx") &&
-      !file.name.endsWith(".xls") &&
-      !file.type.includes("spreadsheet")
-    ) {
-      const msg = "Please upload an Excel file (.xlsx or .xls)";
-      setError(msg);
-      notify({
-        type: "error",
-        title: "Invalid file type",
-        message: msg,
-      });
+    const typeError = validateFileType(file);
+    if (typeError) {
+      setError(typeError);
+      notify({ type: "error", title: "Invalid file type", message: typeError });
       return;
     }
 
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      const msg = "File size must be less than 10MB";
-      setError(msg);
-      notify({
-        type: "error",
-        title: "File too large",
-        message: msg,
-      });
+    const sizeError = validateFileSize(file);
+    if (sizeError) {
+      setError(sizeError);
+      notify({ type: "error", title: "File too large", message: sizeError });
       return;
     }
 
@@ -142,16 +143,18 @@ function UploadData() {
 
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFileName(e.dataTransfer.files[0].name);
-      handleFileUpload(e.dataTransfer.files[0]);
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile) {
+      setSelectedFileName(droppedFile.name);
+      handleFileUpload(droppedFile);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFileName(e.target.files[0].name);
-      handleFileUpload(e.target.files[0]);
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setSelectedFileName(selectedFile.name);
+      handleFileUpload(selectedFile);
       e.target.value = "";
     }
   };
@@ -161,8 +164,151 @@ function UploadData() {
     fileInputRef.current?.click();
   };
 
-  // Chart data preparation
-  const chartData = (predictions?.forecasts ?? []).map((item) => ({
+  return {
+    predictions,
+    loading,
+    downloadingTemplate,
+    error,
+    dragActive,
+    selectedFileName,
+    showUploader,
+    setShowUploader,
+    fileInputRef,
+    handleDownloadTemplate,
+    handleDrag,
+    handleDrop,
+    handleInputChange,
+    handleUploadClick,
+  };
+}
+
+/* ─── Uploader section (drag-drop UI) ─── */
+interface UploaderSectionProps {
+  readonly loading: boolean;
+  readonly dragActive: boolean;
+  readonly selectedFileName: string;
+  readonly handleDrag: (e: React.DragEvent<HTMLDivElement>) => void;
+  readonly handleDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  readonly handleUploadClick: () => void;
+}
+
+function UploaderSection({
+  loading,
+  dragActive,
+  selectedFileName,
+  handleDrag,
+  handleDrop,
+  handleUploadClick,
+}: UploaderSectionProps) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.15 }}
+      onDragEnter={handleDrag}
+      onDragLeave={handleDrag}
+      onDragOver={handleDrag}
+      onDrop={handleDrop}
+      onClick={handleUploadClick}
+      className={`relative overflow-hidden min-h-[calc(100vh-190px)] rounded-[2rem] border-2 border-dashed transition-all duration-300 cursor-pointer ${
+        dragActive
+          ? "border-oil-gold/70 shadow-[0_0_50px_rgba(245,158,11,0.25)]"
+          : "border-white/10 hover:border-oil-gold/40"
+      }`}
+    >
+      {loading ? (
+        <div className="absolute inset-0 z-20 grid place-items-center bg-black/65 backdrop-blur-sm px-6">
+          <div className="w-full max-w-md text-center">
+            <p className="text-white font-semibold text-base md:text-lg">
+              Uploading file...
+            </p>
+            <p className="mt-1 text-xs md:text-sm text-gray-300 break-all">
+              {selectedFileName || "Preparing your Excel data"}
+            </p>
+            <div className="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-white/10 border border-white/10">
+              <motion.div
+                className="h-full w-1/2 rounded-full bg-gradient-to-r from-oil-gold via-oil-amber to-oil-gold"
+                animate={{ x: ["-120%", "220%"] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
+            <p className="mt-3 text-xs text-oil-light-gold/90" aria-live="polite">
+              Please wait while we process your upload.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(245,158,11,0.18),rgba(14,12,10,0.9)_45%),linear-gradient(120deg,rgba(255,255,255,0.03),rgba(255,255,255,0.0)_35%)]" />
+      <motion.div
+        animate={{
+          opacity: dragActive ? 0.7 : 0.4,
+          scale: dragActive ? 1.06 : 1,
+        }}
+        transition={{ duration: 0.35 }}
+        className="absolute -top-32 -right-24 h-80 w-80 rounded-full bg-oil-gold/20 blur-3xl"
+      />
+
+      <div className="relative z-10 min-h-[calc(100vh-190px)] grid place-items-center px-6 py-12">
+        <div className="w-full max-w-2xl flex flex-col items-center text-center">
+          <motion.div
+            animate={{
+              y: dragActive ? 0 : [0, -8, 0],
+              scale: dragActive ? 1.12 : 1,
+              rotate: dragActive ? 2 : 0,
+            }}
+            transition={{ duration: 1.8, repeat: dragActive ? 0 : Infinity }}
+            className="mb-6"
+          >
+            <div className="relative p-4 rounded-3xl bg-gradient-to-br from-oil-gold/30 to-oil-amber/10 border border-oil-gold/30 shadow-xl shadow-oil-gold/20">
+              <Upload size={42} className="text-oil-gold" strokeWidth={1.5} />
+            </div>
+          </motion.div>
+
+          <h2 className="text-xl md:text-2xl font-display font-bold text-white tracking-tight text-center">
+            {dragActive ? "Drop File To Upload" : "Drag And Drop Excel File"}
+          </h2>
+
+          <p className="mt-3 max-w-xl text-sm md:text-base text-gray-300 leading-relaxed text-center">
+            Fill the template with 30-day data, then drop it here to generate forecasts.
+          </p>
+
+          <div className="mt-8 flex flex-col items-center gap-3 text-center">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUploadClick();
+              }}
+              disabled={loading}
+              className="relative overflow-hidden rounded-xl px-7 py-3 text-sm md:text-base font-bold text-oil-black bg-gradient-to-r from-oil-gold to-oil-amber shadow-lg shadow-oil-gold/30 transition-all duration-300 hover:shadow-xl hover:shadow-oil-gold/40 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <span className="relative inline-flex items-center gap-2">
+                <Upload size={18} />
+                {loading ? "Uploading..." : "Choose Excel File"}
+              </span>
+            </button>
+
+            <p className="text-xs md:text-sm text-gray-400">
+              Supports .xlsx and .xls files. Max size 10MB.
+            </p>
+
+            {selectedFileName ? (
+              <p className="text-xs md:text-sm text-oil-gold/90 font-medium text-center">
+                Selected file: {selectedFileName}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+/* ─── Predictions results panel ─── */
+function PredictionsResults({ predictions }: { readonly predictions: PredictionResponse }) {
+  const dateUtils = useDateUtils();
+
+  const chartData = predictions.forecasts.map((item) => ({
     date: dateUtils.format(item.date, "short"),
     price: item.forecasted_price,
     horizon: item.horizon,
@@ -176,262 +322,25 @@ function UploadData() {
     ? priceValues.reduce((a, b) => a + b, 0) / priceValues.length
     : 0;
 
-  const firstForecast = predictions?.forecasts?.[0];
-  const lastForecast = predictions?.forecasts?.[predictions.forecasts.length - 1];
+  const firstForecast = predictions.forecasts[0];
+  const lastForecast = predictions.forecasts[predictions.forecasts.length - 1];
   const priceChange =
     firstForecast && lastForecast
       ? lastForecast.forecasted_price - firstForecast.forecasted_price
       : 0;
-  const priceChangePercent =
-    firstForecast && firstForecast.forecasted_price
-      ? (priceChange / firstForecast.forecasted_price) * 100
-      : 0;
+  const priceChangePercent = firstForecast?.forecasted_price
+    ? (priceChange / firstForecast.forecasted_price) * 100
+    : 0;
   const isPositive = priceChange >= 0;
 
   return (
-    <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1700px] mx-auto min-h-screen bg-oil-black">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-white/5"
-      >
-        <div>
-          <div className="flex items-center gap-2 text-oil-gold/80 text-xs mb-2 font-semibold tracking-widest uppercase">
-            <motion.div
-              animate={{ scale: [1, 1.3, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Upload size={14} />
-            </motion.div>
-            <span>Custom Data Upload</span>
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight font-display">
-            Upload & Predict
-          </h1>
-          <p className="text-gray-500 mt-2 text-sm">
-            Upload your 30-day historical oil price data and get AI-powered forecasts
-          </p>
-        </div>
-
-        <div className="w-full md:w-auto md:self-end flex items-center gap-3 justify-end">
-          {predictions ? (
-            <button
-              type="button"
-              onClick={() => setShowUploader(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/15 text-sm font-semibold text-gray-200 hover:text-white hover:border-white/30 transition-all"
-            >
-              <Upload size={14} />
-              Reupload
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={handleDownloadTemplate}
-            disabled={downloadingTemplate}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-oil-gold/35 text-oil-gold text-sm font-semibold bg-oil-gold/5 hover:bg-oil-gold/12 hover:border-oil-gold/55 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Download size={14} />
-            {downloadingTemplate ? "Downloading..." : "Download Template"}
-          </button>
-        </div>
-      </motion.div>
-
-      {/* Instruction Banner */}
-      <motion.section
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.08 }}
-        className="relative overflow-hidden rounded-2xl border border-oil-gold/20 bg-gradient-to-r from-oil-gold/10 via-white/[0.02] to-transparent p-4 md:p-5"
-      >
-        <div className="absolute inset-y-0 right-0 w-40 bg-oil-gold/10 blur-3xl opacity-50 pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-start gap-3 md:items-center md:gap-2 mb-4">
-            <Info size={16} className="text-oil-gold mt-0.5 md:mt-0" />
-            <h2 className="text-sm md:text-base font-semibold text-white tracking-wide">
-              Before You Upload
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
-                <CalendarDays size={14} />
-                <span className="text-xs uppercase tracking-wider font-semibold">Data Window</span>
-              </div>
-              <p className="text-xs md:text-sm text-gray-300">Provide exactly 30 days of historical data.</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
-                <FileSpreadsheet size={14} />
-                <span className="text-xs uppercase tracking-wider font-semibold">Template</span>
-              </div>
-              <p className="text-xs md:text-sm text-gray-300">Download and use the provided Excel template structure.</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
-                <Upload size={14} />
-                <span className="text-xs uppercase tracking-wider font-semibold">Upload</span>
-              </div>
-              <p className="text-xs md:text-sm text-gray-300">Upload only .xlsx or .xls files (maximum 10MB).</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
-                <CircleCheck size={14} />
-                <span className="text-xs uppercase tracking-wider font-semibold">Result</span>
-              </div>
-              <p className="text-xs md:text-sm text-gray-300">Forecasts are generated instantly after successful upload.</p>
-            </div>
-          </div>
-        </div>
-      </motion.section>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        onChange={handleInputChange}
-        disabled={loading}
-        className="hidden"
-      />
-
-      {showUploader ? (
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-          onClick={handleUploadClick}
-          className={`relative overflow-hidden min-h-[calc(100vh-190px)] rounded-[2rem] border-2 border-dashed transition-all duration-300 cursor-pointer ${
-            dragActive
-              ? "border-oil-gold/70 shadow-[0_0_50px_rgba(245,158,11,0.25)]"
-              : "border-white/10 hover:border-oil-gold/40"
-          }`}
-        >
-          {loading ? (
-            <div className="absolute inset-0 z-20 grid place-items-center bg-black/65 backdrop-blur-sm px-6">
-              <div className="w-full max-w-md text-center">
-                <p className="text-white font-semibold text-base md:text-lg">
-                  Uploading file...
-                </p>
-                <p className="mt-1 text-xs md:text-sm text-gray-300 break-all">
-                  {selectedFileName || "Preparing your Excel data"}
-                </p>
-
-                <div className="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-white/10 border border-white/10">
-                  <motion.div
-                    className="h-full w-1/2 rounded-full bg-gradient-to-r from-oil-gold via-oil-amber to-oil-gold"
-                    animate={{ x: ["-120%", "220%"] }}
-                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                </div>
-
-                <p className="mt-3 text-xs text-oil-light-gold/90" aria-live="polite">
-                  Please wait while we process your upload.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(245,158,11,0.18),rgba(14,12,10,0.9)_45%),linear-gradient(120deg,rgba(255,255,255,0.03),rgba(255,255,255,0.0)_35%)]" />
-          <motion.div
-            animate={{
-              opacity: dragActive ? 0.7 : 0.4,
-              scale: dragActive ? 1.06 : 1,
-            }}
-            transition={{ duration: 0.35 }}
-            className="absolute -top-32 -right-24 h-80 w-80 rounded-full bg-oil-gold/20 blur-3xl"
-          />
-
-          <div className="relative z-10 min-h-[calc(100vh-190px)] grid place-items-center px-6 py-12">
-            <div className="w-full max-w-2xl flex flex-col items-center text-center">
-              <motion.div
-                animate={{
-                  y: dragActive ? 0 : [0, -8, 0],
-                  scale: dragActive ? 1.12 : 1,
-                  rotate: dragActive ? 2 : 0,
-                }}
-                transition={{ duration: 1.8, repeat: dragActive ? 0 : Infinity }}
-                className="mb-6"
-              >
-                <div className="relative p-4 rounded-3xl bg-gradient-to-br from-oil-gold/30 to-oil-amber/10 border border-oil-gold/30 shadow-xl shadow-oil-gold/20">
-                  <Upload size={42} className="text-oil-gold" strokeWidth={1.5} />
-                </div>
-              </motion.div>
-
-              <h2 className="text-xl md:text-2xl font-display font-bold text-white tracking-tight text-center">
-                {dragActive ? "Drop File To Upload" : "Drag And Drop Excel File"}
-              </h2>
-
-              <p className="mt-3 max-w-xl text-sm md:text-base text-gray-300 leading-relaxed text-center">
-                Fill the template with 30-day data, then drop it here to generate forecasts.
-              </p>
-
-              <div className="mt-8 flex flex-col items-center gap-3 text-center">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUploadClick();
-                  }}
-                  disabled={loading}
-                  className="relative overflow-hidden rounded-xl px-7 py-3 text-sm md:text-base font-bold text-oil-black bg-gradient-to-r from-oil-gold to-oil-amber shadow-lg shadow-oil-gold/30 transition-all duration-300 hover:shadow-xl hover:shadow-oil-gold/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <span className="relative inline-flex items-center gap-2">
-                    <Upload size={18} />
-                    {loading ? "Uploading..." : "Choose Excel File"}
-                  </span>
-                </button>
-
-                <p className="text-xs md:text-sm text-gray-400">
-                  Supports .xlsx and .xls files. Max size 10MB.
-                </p>
-
-                {selectedFileName ? (
-                  <p className="text-xs md:text-sm text-oil-gold/90 font-medium text-center">
-                    Selected file: {selectedFileName}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </motion.section>
-      ) : null}
-
-      {/* Error Message */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30"
-          >
-            <AlertCircle size={20} className="text-red-400 flex-shrink-0" />
-            <div>
-              <p className="text-red-300 font-medium">Error</p>
-              <p className="text-red-200/70 text-sm">{error}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Results */}
-      <AnimatePresence>
-        {predictions && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-8"
-          >
-            {/* KPI Cards */}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-8"
+    >
+      {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Last Price */}
               <motion.div
@@ -679,8 +588,172 @@ function UploadData() {
                 </p>
               </div>
             </motion.div>
+    </motion.div>
+  );
+}
+
+/* ─── Main UploadData page ─── */
+function UploadData() {
+  const {
+    predictions,
+    loading,
+    downloadingTemplate,
+    error,
+    dragActive,
+    selectedFileName,
+    showUploader,
+    setShowUploader,
+    fileInputRef,
+    handleDownloadTemplate,
+    handleDrag,
+    handleDrop,
+    handleInputChange,
+    handleUploadClick,
+  } = useFileUpload();
+
+  return (
+    <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1700px] mx-auto min-h-screen bg-oil-black">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-white/5"
+      >
+        <div>
+          <div className="flex items-center gap-2 text-oil-gold/80 text-xs mb-2 font-semibold tracking-widest uppercase">
+            <motion.div
+              animate={{ scale: [1, 1.3, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <Upload size={14} />
+            </motion.div>
+            <span>Custom Data Upload</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight font-display">
+            Upload & Predict
+          </h1>
+          <p className="text-gray-500 mt-2 text-sm">
+            Upload your 30-day historical oil price data and get AI-powered forecasts
+          </p>
+        </div>
+
+        <div className="w-full md:w-auto md:self-end flex items-center gap-3 justify-end">
+          {predictions ? (
+            <button
+              type="button"
+              onClick={() => setShowUploader(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/15 text-sm font-semibold text-gray-200 hover:text-white hover:border-white/30 transition-all"
+            >
+              <Upload size={14} />
+              Reupload
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            disabled={downloadingTemplate}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-oil-gold/35 text-oil-gold text-sm font-semibold bg-oil-gold/5 hover:bg-oil-gold/12 hover:border-oil-gold/55 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Download size={14} />
+            {downloadingTemplate ? "Downloading..." : "Download Template"}
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Instruction Banner */}
+      <motion.section
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className="relative overflow-hidden rounded-2xl border border-oil-gold/20 bg-gradient-to-r from-oil-gold/10 via-white/[0.02] to-transparent p-4 md:p-5"
+      >
+        <div className="absolute inset-y-0 right-0 w-40 bg-oil-gold/10 blur-3xl opacity-50 pointer-events-none" />
+        <div className="relative z-10">
+          <div className="flex items-start gap-3 md:items-center md:gap-2 mb-4">
+            <Info size={16} className="text-oil-gold mt-0.5 md:mt-0" />
+            <h2 className="text-sm md:text-base font-semibold text-white tracking-wide">
+              Before You Upload
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
+                <CalendarDays size={14} />
+                <span className="text-xs uppercase tracking-wider font-semibold">Data Window</span>
+              </div>
+              <p className="text-xs md:text-sm text-gray-300">Provide exactly 30 days of historical data.</p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
+                <FileSpreadsheet size={14} />
+                <span className="text-xs uppercase tracking-wider font-semibold">Template</span>
+              </div>
+              <p className="text-xs md:text-sm text-gray-300">Download and use the provided Excel template structure.</p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
+                <Upload size={14} />
+                <span className="text-xs uppercase tracking-wider font-semibold">Upload</span>
+              </div>
+              <p className="text-xs md:text-sm text-gray-300">Upload only .xlsx or .xls files (maximum 10MB).</p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center gap-2 text-oil-gold mb-1.5">
+                <CircleCheck size={14} />
+                <span className="text-xs uppercase tracking-wider font-semibold">Result</span>
+              </div>
+              <p className="text-xs md:text-sm text-gray-300">Forecasts are generated instantly after successful upload.</p>
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        onChange={handleInputChange}
+        disabled={loading}
+        className="hidden"
+      />
+
+      {showUploader ? (
+        <UploaderSection
+          loading={loading}
+          dragActive={dragActive}
+          selectedFileName={selectedFileName}
+          handleDrag={handleDrag}
+          handleDrop={handleDrop}
+          handleUploadClick={handleUploadClick}
+        />
+      ) : null}
+
+      {/* Error Message */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30"
+          >
+            <AlertCircle size={20} className="text-red-400 flex-shrink-0" />
+            <div>
+              <p className="text-red-300 font-medium">Error</p>
+              <p className="text-red-200/70 text-sm">{error}</p>
+            </div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Results */}
+      <AnimatePresence>
+        {predictions && <PredictionsResults predictions={predictions} />}
       </AnimatePresence>
     </div>
   );

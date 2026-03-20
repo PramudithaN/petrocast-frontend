@@ -76,10 +76,10 @@ export function useDateConfig(): DateConfigContextValue {
 }
 
 interface DateConfigProviderProps {
-  children: ReactNode;
-  locale?: string;
-  timezone?: string;
-  dateFormats?: Partial<Record<DateFormatType, Intl.DateTimeFormatOptions>>;
+  readonly children: ReactNode;
+  readonly locale?: string;
+  readonly timezone?: string;
+  readonly dateFormats?: Partial<Record<DateFormatType, Intl.DateTimeFormatOptions>>;
 }
 
 /* ─── Provider Component ──────────────────────────── */
@@ -103,7 +103,7 @@ export function DateConfigProvider({
       formatDate: (date: string | Date, format: DateFormatType = "medium"): string => {
         try {
           const dateObj = typeof date === "string" ? new Date(date) : date;
-          if (isNaN(dateObj.getTime())) return "Invalid Date";
+          if (Number.isNaN(dateObj.getTime())) return "Invalid Date";
           
           return dateObj.toLocaleDateString(locale, {
             ...mergedFormats[format],
@@ -123,7 +123,7 @@ export function DateConfigProvider({
           const start = typeof startDate === "string" ? new Date(startDate) : startDate;
           const end = typeof endDate === "string" ? new Date(endDate) : endDate;
 
-          if (isNaN(start.getTime()) || isNaN(end.getTime())) return "Invalid Date Range";
+          if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Invalid Date Range";
 
           const startStr = start.toLocaleDateString(locale, {
             ...mergedFormats.medium,
@@ -143,7 +143,7 @@ export function DateConfigProvider({
       parseDateString: (dateString: string): Date => {
         // Try ISO format first
         const date = new Date(dateString);
-        if (!isNaN(date.getTime())) return date;
+        if (!Number.isNaN(date.getTime())) return date;
         
         // Try common formats
         const formats = [

@@ -571,14 +571,14 @@ export const downloadExcelTemplate = async (): Promise<void> => {
     }
 
     const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
+    const url = globalThis.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "oil_price_template.xlsx";
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    link.remove();
+    globalThis.URL.revokeObjectURL(url);
   } catch (error) {
     throw new Error(`Error downloading template: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
