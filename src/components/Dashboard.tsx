@@ -206,7 +206,16 @@ const AnalyticsTooltip = ({ active, payload, label }: any) => {
 };
 
 const DEFAULT_ANALYTICS_START_DATE = "2026-01-01";
-const DEFAULT_ANALYTICS_END_DATE = "2026-03-17";
+const getTodayDateInputValue = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+const DEFAULT_ANALYTICS_END_DATE = getTodayDateInputValue();
 
 type DashboardTab = "forecast" | "historical" | "analytics";
 type DashboardNotificationScope =
