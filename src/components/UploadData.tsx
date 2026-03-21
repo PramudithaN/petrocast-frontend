@@ -112,7 +112,7 @@ function useFileUpload() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to upload file";
       const detail = (err as any)?.detail || "";
-      setError(msg);
+      setError(detail || msg);
       notify({
         type: "error",
         title: "Upload failed",
@@ -635,7 +635,7 @@ function UploadData() {
           {predictions ? (
             <button
               type="button"
-              onClick={() => setShowUploader(true)}
+              onClick={() => { setShowUploader(true); handleUploadClick(); }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/15 text-sm font-semibold text-gray-200 hover:text-white hover:border-white/30 transition-all"
             >
               <Upload size={14} />
@@ -715,6 +715,26 @@ function UploadData() {
         className="hidden"
       />
 
+      {/* Error Banner */}
+      <AnimatePresence>
+        {error ? (
+          <motion.div
+            key="upload-error"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22 }}
+            className="flex items-start gap-3 rounded-2xl border border-red-500/35 bg-red-500/10 px-5 py-4"
+          >
+            <AlertCircle size={20} className="text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-300">Upload Error</p>
+              <p className="text-sm text-red-200/75 mt-0.5 leading-relaxed">{error}</p>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
       {showUploader ? (
         <UploaderSection
           loading={loading}
@@ -725,24 +745,6 @@ function UploadData() {
           handleUploadClick={handleUploadClick}
         />
       ) : null}
-
-      {/* Error Message */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30"
-          >
-            <AlertCircle size={20} className="text-red-400 flex-shrink-0" />
-            <div>
-              <p className="text-red-300 font-medium">Error</p>
-              <p className="text-red-200/70 text-sm">{error}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Results */}
       <AnimatePresence>
