@@ -111,7 +111,9 @@ const SkeletonDashboard = () => (
 const SentimentGauge = ({ value }: { value: number }) => {
   const isPositive = value >= 0;
   const label = Math.abs(value) > 1 ? "Strong" : "Mild";
-  const sentiment = isPositive ? `${label} Bullish` : `${label} Bearish`;
+  const sentiment = isPositive
+    ? `${label} Upside Bias`
+    : `${label} Downside Bias`;
   const color = isPositive ? "#10B981" : "#EF4444";
 
   return (
@@ -863,7 +865,7 @@ function Dashboard() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">
-                    Market Sentiment
+                    Forecast Bias
                   </span>
                 </div>
                 <SentimentGauge value={priceChangePercent} />
