@@ -218,8 +218,58 @@ const fetchJson = async <T>(url: string): Promise<T> => {
   return response.json();
 };
 
-export const fetchPredictions = async (): Promise<PredictionResponse> =>
-  normalizePredictionResponse(await fetchJson<unknown>(PREDICTION_API_URL));
+const PREDICTION_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface PredictionCacheEntry {
+  data: PredictionResponse;
+  timestamp: number;
+}
+
+let predictionCacheEntry: PredictionCacheEntry | null = null;
+let predictionInFlightRequest: Promise<PredictionResponse> | null = null;
+
+const getFreshPredictionCacheEntry = (): PredictionCacheEntry | null => {
+  if (!predictionCacheEntry) return null;
+  if (Date.now() - predictionCacheEntry.timestamp > PREDICTION_CACHE_TTL_MS) {
+    predictionCacheEntry = null;
+    return null;
+  }
+  return predictionCacheEntry;
+};
+
+export const getCachedPrediction = (): PredictionResponse | null =>
+  getFreshPredictionCacheEntry()?.data ?? null;
+
+export const clearPredictionCache = (): void => {
+  predictionCacheEntry = null;
+  predictionInFlightRequest = null;
+};
+
+export const fetchPredictions = async (
+  requestOptions?: { forceRefresh?: boolean },
+): Promise<PredictionResponse> => {
+  const useCache = !requestOptions?.forceRefresh;
+
+  if (useCache) {
+    const cached = getFreshPredictionCacheEntry();
+    if (cached) return cached.data;
+
+    if (predictionInFlightRequest) return predictionInFlightRequest;
+  }
+
+  const request = fetchJson<unknown>(PREDICTION_API_URL)
+    .then((payload) => normalizePredictionResponse(payload))
+    .then((result) => {
+      predictionCacheEntry = { data: result, timestamp: Date.now() };
+      return result;
+    })
+    .finally(() => {
+      predictionInFlightRequest = null;
+    });
+
+  predictionInFlightRequest = request;
+  return request;
+};
 
 export const fetchFanPredictions = async (): Promise<FanResponse> =>
   normalizeFanResponse(await fetchJson<unknown>(FAN_API_URL));

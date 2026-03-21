@@ -12,6 +12,7 @@ import {
   fetchHistoricalPricesProgressive as fetchHistoricalPricesProgressiveApi,
   fetchPredictionComparison as fetchPredictionComparisonApi,
   fetchPredictions as fetchPredictionsApi,
+  getCachedPrediction,
 } from "../api";
 import {
   AreaChart,
@@ -233,15 +234,17 @@ const NOTIFICATION_SCOPE_TO_TAB: Record<DashboardNotificationScope, DashboardTab
   fan: "analytics",
 };
 
+const initialCachedPrediction = getCachedPrediction();
+
 function Dashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("forecast");
-  const [data, setData] = useState<PredictionResponse | null>(null);
+  const [data, setData] = useState<PredictionResponse | null>(() => initialCachedPrediction);
   const [historicalData, setHistoricalData] =
     useState<HistoricalPricesResponse | null>(null);
   const [fanData, setFanData] = useState<FanResponse | null>(null);
   const [analyticsData, setAnalyticsData] =
     useState<PredictionComparisonResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(!initialCachedPrediction);
   const [historicalLoading, setHistoricalLoading] = useState<boolean>(true);
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(true);
   const [historicalProgress, setHistoricalProgress] = useState<number>(0);
@@ -298,7 +301,9 @@ function Dashboard() {
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
-    fetchPredictions();
+    if (!initialCachedPrediction) {
+      fetchPredictions();
+    }
     fetchFan();
     fetchHistoricalPrices();
     fetchPredictionComparison(
@@ -307,11 +312,11 @@ function Dashboard() {
     );
   }, []);
 
-  const fetchPredictions = async () => {
+  const fetchPredictions = async (requestOptions?: { forceRefresh?: boolean }) => {
     try {
       setLoading(true);
       setError(null);
-      const result = await fetchPredictionsApi();
+      const result = await fetchPredictionsApi(requestOptions);
       setData(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch predictions";
@@ -421,7 +426,7 @@ function Dashboard() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      fetchPredictions(),
+      fetchPredictions({ forceRefresh: true }),
       fetchFan(),
       fetchHistoricalPrices(),
       fetchPredictionComparison(analyticsStartDate, analyticsEndDate),
