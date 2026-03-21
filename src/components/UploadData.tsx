@@ -210,10 +210,10 @@ function UploaderSection({
       onDragOver={handleDrag}
       onDrop={handleDrop}
       onClick={handleUploadClick}
-      className={`relative overflow-hidden min-h-[calc(100vh-190px)] rounded-[2rem] border-2 border-dashed transition-all duration-300 cursor-pointer ${
+      className={`relative overflow-hidden min-h-[calc(100vh-220px)] rounded-[2rem] border-2 border-dashed backdrop-blur-xl transition-all duration-300 cursor-pointer bg-oil-black/25 ${
         dragActive
-          ? "border-oil-gold/70 shadow-[0_0_50px_rgba(245,158,11,0.25)]"
-          : "border-white/10 hover:border-oil-gold/40"
+          ? "border-oil-gold/55 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]"
+          : "border-white/20 hover:border-white/30"
       }`}
     >
       {loading ? (
@@ -227,7 +227,7 @@ function UploaderSection({
             </p>
             <div className="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-white/10 border border-white/10">
               <motion.div
-                className="h-full w-1/2 rounded-full bg-gradient-to-r from-oil-gold via-oil-amber to-oil-gold"
+                className="h-full w-1/2 rounded-full bg-oil-gold"
                 animate={{ x: ["-120%", "220%"] }}
                 transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
               />
@@ -239,18 +239,10 @@ function UploaderSection({
         </div>
       ) : null}
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(245,158,11,0.18),rgba(14,12,10,0.9)_45%),linear-gradient(120deg,rgba(255,255,255,0.03),rgba(255,255,255,0.0)_35%)]" />
-      <motion.div
-        animate={{
-          opacity: dragActive ? 0.7 : 0.4,
-          scale: dragActive ? 1.06 : 1,
-        }}
-        transition={{ duration: 0.35 }}
-        className="absolute -top-32 -right-24 h-80 w-80 rounded-full bg-oil-gold/20 blur-3xl"
-      />
+      <div className="absolute inset-0 bg-[linear-gradient(150deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)_35%,rgba(255,255,255,0.00)_65%)]" />
 
-      <div className="relative z-10 min-h-[calc(100vh-190px)] grid place-items-center px-6 py-12">
-        <div className="w-full max-w-2xl flex flex-col items-center text-center">
+      <div className="relative z-10 min-h-[calc(100vh-220px)] grid place-items-center px-6 py-10">
+        <div className="w-full max-w-2xl rounded-3xl border border-white/12 bg-oil-black/35 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl px-6 py-8 md:px-10 md:py-10 flex flex-col items-center text-center">
           <motion.div
             animate={{
               y: dragActive ? 0 : [0, -8, 0],
@@ -260,7 +252,7 @@ function UploaderSection({
             transition={{ duration: 1.8, repeat: dragActive ? 0 : Infinity }}
             className="mb-6"
           >
-            <div className="relative p-4 rounded-3xl bg-gradient-to-br from-oil-gold/30 to-oil-amber/10 border border-oil-gold/30 shadow-xl shadow-oil-gold/20">
+            <div className="relative p-4 rounded-3xl bg-oil-gold/10 border border-oil-gold/20">
               <Upload size={42} className="text-oil-gold" strokeWidth={1.5} />
             </div>
           </motion.div>
@@ -270,7 +262,7 @@ function UploaderSection({
           </h2>
 
           <p className="mt-3 max-w-xl text-sm md:text-base text-gray-300 leading-relaxed text-center">
-            Fill the template with 30-day data, then drop it here to generate forecasts.
+            Fill the template with 21-day data, then drop it here to generate forecasts.
           </p>
 
           <div className="mt-8 flex flex-col items-center gap-3 text-center">
@@ -280,7 +272,7 @@ function UploaderSection({
                 handleUploadClick();
               }}
               disabled={loading}
-              className="relative overflow-hidden rounded-xl px-7 py-3 text-sm md:text-base font-bold text-oil-black bg-gradient-to-r from-oil-gold to-oil-amber shadow-lg shadow-oil-gold/30 transition-all duration-300 hover:shadow-xl hover:shadow-oil-gold/40 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="relative overflow-hidden rounded-xl px-7 py-3 text-sm md:text-base font-bold text-oil-black bg-oil-gold transition-all duration-300 hover:bg-oil-light-gold disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span className="relative inline-flex items-center gap-2">
                 <Upload size={18} />
@@ -293,7 +285,7 @@ function UploaderSection({
             </p>
 
             {selectedFileName ? (
-              <p className="text-xs md:text-sm text-oil-gold/90 font-medium text-center">
+              <p className="text-xs md:text-sm text-gray-300 font-medium text-center">
                 Selected file: {selectedFileName}
               </p>
             ) : null}
@@ -612,7 +604,9 @@ function UploadData() {
   } = useFileUpload();
 
   return (
-    <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1700px] mx-auto min-h-screen bg-oil-black">
+    <div className="relative px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1700px] mx-auto min-h-screen bg-oil-black">
+      <div className="pointer-events-none absolute top-28 right-10 h-44 w-44 rounded-full bg-oil-gold/10 blur-3xl" />
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -666,10 +660,9 @@ function UploadData() {
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08 }}
-        className="relative overflow-hidden rounded-2xl border border-oil-gold/20 bg-gradient-to-r from-oil-gold/10 via-white/[0.02] to-transparent p-4 md:p-5"
+        className="glass-strong rounded-2xl p-4 md:p-5 border border-white/10"
       >
-        <div className="absolute inset-y-0 right-0 w-40 bg-oil-gold/10 blur-3xl opacity-50 pointer-events-none" />
-        <div className="relative z-10">
+        <div>
           <div className="flex items-start gap-3 md:items-center md:gap-2 mb-4">
             <Info size={16} className="text-oil-gold mt-0.5 md:mt-0" />
             <h2 className="text-sm md:text-base font-semibold text-white tracking-wide">
@@ -678,7 +671,7 @@ function UploadData() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-xl border border-white/12 bg-oil-black/35 backdrop-blur-md p-3 shadow-[0_8px_22px_rgba(0,0,0,0.3)] transition-all duration-300 hover:border-oil-gold/30 hover:bg-oil-black/45">
               <div className="flex items-center gap-2 text-oil-gold mb-1.5">
                 <CalendarDays size={14} />
                 <span className="text-xs uppercase tracking-wider font-semibold">Data Window</span>
@@ -686,7 +679,7 @@ function UploadData() {
               <p className="text-xs md:text-sm text-gray-300">Provide exactly 21 days of historical data.</p>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-xl border border-white/12 bg-oil-black/35 backdrop-blur-md p-3 shadow-[0_8px_22px_rgba(0,0,0,0.3)] transition-all duration-300 hover:border-oil-gold/30 hover:bg-oil-black/45">
               <div className="flex items-center gap-2 text-oil-gold mb-1.5">
                 <FileSpreadsheet size={14} />
                 <span className="text-xs uppercase tracking-wider font-semibold">Template</span>
@@ -694,7 +687,7 @@ function UploadData() {
               <p className="text-xs md:text-sm text-gray-300">Download and use the provided Excel template structure.</p>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-xl border border-white/12 bg-oil-black/35 backdrop-blur-md p-3 shadow-[0_8px_22px_rgba(0,0,0,0.3)] transition-all duration-300 hover:border-oil-gold/30 hover:bg-oil-black/45">
               <div className="flex items-center gap-2 text-oil-gold mb-1.5">
                 <Upload size={14} />
                 <span className="text-xs uppercase tracking-wider font-semibold">Upload</span>
@@ -702,7 +695,7 @@ function UploadData() {
               <p className="text-xs md:text-sm text-gray-300">Upload only .xlsx or .xls files (maximum 10MB).</p>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-xl border border-white/12 bg-oil-black/35 backdrop-blur-md p-3 shadow-[0_8px_22px_rgba(0,0,0,0.3)] transition-all duration-300 hover:border-oil-gold/30 hover:bg-oil-black/45">
               <div className="flex items-center gap-2 text-oil-gold mb-1.5">
                 <CircleCheck size={14} />
                 <span className="text-xs uppercase tracking-wider font-semibold">Result</span>
