@@ -633,7 +633,7 @@ function UploadData() {
             Upload & Predict
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Upload your 30-day historical oil price data and get AI-powered forecasts
+            Upload your 21-day historical oil price data and get AI-powered forecasts
           </p>
         </div>
 
@@ -683,7 +683,7 @@ function UploadData() {
                 <CalendarDays size={14} />
                 <span className="text-xs uppercase tracking-wider font-semibold">Data Window</span>
               </div>
-              <p className="text-xs md:text-sm text-gray-300">Provide exactly 30 days of historical data.</p>
+              <p className="text-xs md:text-sm text-gray-300">Provide exactly 21 days of historical data.</p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/20 p-3">
