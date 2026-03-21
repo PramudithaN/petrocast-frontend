@@ -66,7 +66,7 @@ const Footer = () => {
         {/* Bottom Bar */}
         <div className="mt-10 pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-gray-600 text-xs">
-            © 2025 PetroCast · Final Year Research Project
+            © 2026 PetroCast · Final Year Research Project
           </p>
           <div className="flex items-center gap-2">
             <motion.div

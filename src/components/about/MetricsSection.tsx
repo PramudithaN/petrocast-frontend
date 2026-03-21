@@ -47,13 +47,13 @@ const MetricsSection = () => {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
       <MetricCard
         label="Forecast Days"
-        value={14}
+        value={5}
         suffix=""
         icon={<TrendingUp size={20} />}
       />
       <MetricCard
         label="Data Features"
-        value={15}
+        value={20}
         suffix="+"
         icon={<Database size={20} />}
       />

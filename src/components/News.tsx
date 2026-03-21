@@ -36,7 +36,7 @@ const NewsImage = ({
   return (
     <>
       {!loaded && (
-        <div className="absolute inset-0 bg-oil-dark/80 animate-pulse" />
+        <div className="skeleton-loader absolute inset-0 animate-pulse" />
       )}
       <img
         src={src}
@@ -310,7 +310,7 @@ const News = () => {
         {loading && (
           <div className="grid md:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((key) => (
-              <div key={key} className="h-48 rounded-2xl bg-white/5 animate-pulse" />
+              <div key={key} className="skeleton-loader h-48 rounded-2xl animate-pulse" />
             ))}
           </div>
         )}

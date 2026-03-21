@@ -49,7 +49,7 @@ import { useDateUtils } from "../utils/dateUtils";
 
 /* ─── Skeleton Loader ─── */
 const Skeleton = ({ className = "" }: { className?: string }) => (
-  <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} />
+  <div className={`skeleton-loader animate-pulse rounded-xl ${className}`} />
 );
 
 const parseFiniteNumber = (value: unknown): number | null => {

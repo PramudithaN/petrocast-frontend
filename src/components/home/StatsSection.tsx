@@ -51,7 +51,7 @@ const StatsSection = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-oil-black via-oil-dark/50 to-oil-black" />
       <div className="max-w-5xl mx-auto relative z-10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
-          <StatCard value={14} suffix="-Day" label="Forecast Horizon" delay={0} />
+          <StatCard value={5} suffix="-Day" label="Forecast Horizon" delay={0} />
           <StatCard value={3} suffix="+" label="AI Models" delay={1} />
           <StatCard value={10} suffix="+" label="Years of Data" delay={2} />
           <StatCard value={99} suffix="%" label="Uptime" delay={3} />
