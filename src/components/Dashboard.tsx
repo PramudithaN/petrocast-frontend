@@ -6,12 +6,14 @@ import {
   HistoricalPricesResponse,
   PredictionComparisonResponse,
   PredictionResponse,
+  ExplainResponse,
 } from "../types/api";
 import {
   fetchFanPredictions as fetchFanPredictionsApi,
   fetchHistoricalPricesProgressive as fetchHistoricalPricesProgressiveApi,
   fetchPredictionComparison as fetchPredictionComparisonApi,
   fetchPredictions as fetchPredictionsApi,
+  fetchExplain as fetchExplainApi,
   getCachedPrediction,
 } from "../api";
 import {
@@ -41,10 +43,12 @@ import {
   AlertTriangle,
   Clock,
   Download,
+  Brain,
 } from "lucide-react";
 import CountUp from "react-countup";
 import AnimatedButton from "./ui/AnimatedButton";
 import FanChart from "./FanChart";
+import ExplainPanel, { ExplainPanelSkeleton } from "./ExplainPanel";
 import { useNotification } from "../context/NotificationContext";
 import { useDateUtils } from "../utils/dateUtils";
 
@@ -89,7 +93,7 @@ const formatCurrency = (
 ): string => `$${formatFixed(value, digits, fallback)}`;
 
 const SkeletonDashboard = () => (
-  <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1600px] mx-auto min-h-screen">
+  <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-400 mx-auto min-h-screen">
     <div className="flex flex-col md:flex-row justify-between gap-6 pb-6 border-b border-white/5">
       <div className="space-y-3">
         <Skeleton className="h-4 w-32" />
@@ -103,7 +107,7 @@ const SkeletonDashboard = () => (
         <Skeleton key={cardNum} className="h-36 rounded-2xl" />
       ))}
     </div>
-    <Skeleton className="h-[450px] rounded-3xl" />
+    <Skeleton className="h-112.5 rounded-3xl" />
     <Skeleton className="h-64 rounded-3xl" />
   </div>
 );
@@ -167,7 +171,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     value === null ? String(payload[0]?.value ?? "-") : formatCurrency(value);
 
   return (
-    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[160px]">
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-40">
       <p className="text-xs text-gray-400 mb-2">{label}</p>
       <p className="text-xl font-bold text-oil-gold font-display">{displayValue}</p>
       <p className="text-xs text-gray-500 mt-1">
@@ -184,7 +188,7 @@ const AnalyticsTooltip = ({ active, payload, label }: any) => {
   if (!point) return null;
 
   return (
-    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[220px]">
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-55">
       <p className="text-xs text-gray-400 mb-3">{label}</p>
       <div className="space-y-2 text-xs">
         <div className="flex items-center justify-between gap-4">
@@ -204,6 +208,37 @@ const AnalyticsTooltip = ({ active, payload, label }: any) => {
           <span className="font-mono text-gray-300">{point.predictionCount}</span>
         </div>
       </div>
+    </div>
+  );
+};
+
+const HistoricalPriceTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+
+  return (
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-45">
+      <p className="text-xs text-gray-400 mb-2">{label}</p>
+      <p className="text-lg font-bold text-oil-cyan mb-1">${point.price.toFixed(2)}</p>
+      <p className="text-xs text-gray-500">
+        O: {point.open.toFixed(2)}  H: {point.high.toFixed(2)}
+      </p>
+      <p className="text-xs text-gray-500">L: {point.low.toFixed(2)}</p>
+    </div>
+  );
+};
+
+const HistoricalChangeTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const value = payload[0]?.value;
+
+  return (
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-45">
+      <p className="text-xs text-gray-400 mb-2">{label}</p>
+      <p className="text-lg font-bold text-oil-gold mb-1">
+        Change : {Number(value ?? 0).toFixed(2)}%
+      </p>
     </div>
   );
 };
@@ -236,7 +271,7 @@ const NOTIFICATION_SCOPE_TO_TAB: Record<DashboardNotificationScope, DashboardTab
 
 const initialCachedPrediction = getCachedPrediction();
 
-function Dashboard() {
+function Dashboard() { // NOSONAR: This container intentionally orchestrates multiple tabs/data sources in one screen.
   const [activeTab, setActiveTab] = useState<DashboardTab>("forecast");
   const [data, setData] = useState<PredictionResponse | null>(() => initialCachedPrediction);
   const [historicalData, setHistoricalData] =
@@ -256,6 +291,10 @@ function Dashboard() {
   const [analyticsEndDate, setAnalyticsEndDate] =
     useState<string>(DEFAULT_ANALYTICS_END_DATE);
   const [refreshing, setRefreshing] = useState(false);
+  const [explainOpen, setExplainOpen] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainData, setExplainData] = useState<ExplainResponse | null>(null);
+  const [explainError, setExplainError] = useState<string | null>(null);
   const { notify } = useNotification();
   const dateUtils = useDateUtils();
   // Guards against React StrictMode double-invocation firing the initial fetches twice.
@@ -420,6 +459,23 @@ function Dashboard() {
       });
     } finally {
       setAnalyticsLoading(false);
+    }
+  };
+
+  const handleExplain = async () => {
+    setExplainOpen(true);
+    if (explainData) return; // use cached result
+    setExplainLoading(true);
+    setExplainError(null);
+    try {
+      const result = await fetchExplainApi();
+      setExplainData(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch explanation";
+      setExplainError(msg);
+      notify({ type: "error", title: "Explain failed", message: msg });
+    } finally {
+      setExplainLoading(false);
     }
   };
 
@@ -650,7 +706,8 @@ function Dashboard() {
   const analyticsMetrics = analyticsData?.metrics;
 
   return (
-    <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1600px] mx-auto min-h-screen bg-oil-black">
+    <>
+    <div className="px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-400 mx-auto min-h-screen bg-oil-black">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -703,21 +760,32 @@ function Dashboard() {
             </span>
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className={`group flex items-center gap-3 px-6 py-3 glass hover:border-oil-gold/30 rounded-xl text-white font-medium transition-all duration-300 disabled:opacity-50 ${refreshing ? "cursor-not-allowed" : "cursor-pointer"}`}
-        >
-          <RefreshCw
-            size={18}
-            className={`transition-transform duration-700 ${
-              refreshing ? "animate-spin" : "group-hover:rotate-180"
-            }`}
-          />
-          <span>{refreshing ? "Refreshing..." : "Refresh Data"}</span>
-        </motion.button>
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={handleExplain}
+            className="group flex items-center gap-2 px-5 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30 text-violet-300 font-medium text-sm hover:border-violet-400/50 hover:bg-violet-500/15 transition-all duration-300 cursor-pointer"
+          >
+            <Brain size={16} className="transition-transform duration-300 group-hover:scale-110" />
+            <span>Explain</span>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className={`group flex items-center gap-3 px-6 py-3 glass hover:border-oil-gold/30 rounded-xl text-white font-medium transition-all duration-300 disabled:opacity-50 ${refreshing ? "cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            <RefreshCw
+              size={18}
+              className={`transition-transform duration-700 ${
+                refreshing ? "animate-spin" : "group-hover:rotate-180"
+              }`}
+            />
+            <span>{refreshing ? "Refreshing..." : "Refresh Data"}</span>
+          </motion.button>
+        </div>
       </motion.div>
 
       <div className="flex items-center gap-3">
@@ -887,7 +955,7 @@ function Dashboard() {
           >
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-gold to-oil-amber" />
+                <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-gold to-oil-amber" />
                 Price Trajectory
               </h3>
               <div className="flex items-center gap-4 text-xs">
@@ -897,7 +965,7 @@ function Dashboard() {
                 </span>
               </div>
             </div>
-            <div className="h-[400px] w-full">
+            <div className="h-100 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>
@@ -985,7 +1053,7 @@ function Dashboard() {
                 initial={{ width: 0 }}
                 animate={{ width: "100%" }}
                 transition={{ duration: 1.5, ease: "easeOut" }}
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-oil-amber via-oil-gold to-oil-light-gold rounded-full"
+                className="absolute inset-y-0 left-0 bg-linear-to-r from-oil-amber via-oil-gold to-oil-light-gold rounded-full"
               />
               {/* Current price indicator */}
               <motion.div
@@ -1007,7 +1075,7 @@ function Dashboard() {
             className="glass rounded-3xl overflow-hidden"
           >
             <div className="p-6 md:p-8 border-b border-white/5 flex items-center gap-3">
-              <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-blue to-oil-cyan" />
+              <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-blue to-oil-cyan" />
               <h3 className="text-lg font-bold text-white font-display">
                 Detailed Forecasts
               </h3>
@@ -1017,7 +1085,7 @@ function Dashboard() {
                 columns={columns}
                 dataSource={tableData}
                 pagination={false}
-                rowClassName="hover:bg-white/[0.03] transition-colors border-b border-white/5 last:border-0"
+                rowClassName="hover:bg-white/3 transition-colors border-b border-white/5 last:border-0"
               />
             </div>
           </motion.div>
@@ -1049,7 +1117,7 @@ function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
+              <div className="rounded-xl bg-white/3 border border-white/10 p-4">
                 <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-[0.2em] mb-2">
                   <Calendar size={13} className="text-oil-cyan" />
                   Dataset Window
@@ -1060,7 +1128,7 @@ function Dashboard() {
                 <p className="text-xs text-gray-500 mt-1">to {historicalEndDate}</p>
               </div>
 
-              <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
+              <div className="rounded-xl bg-white/3 border border-white/10 p-4">
                 <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-[0.2em] mb-2">
                   <Activity size={13} className="text-emerald-400" />
                   Records Loaded
@@ -1071,13 +1139,13 @@ function Dashboard() {
                 </p>
                 <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-oil-cyan"
+                    className="h-full rounded-full bg-linear-to-r from-emerald-400 to-oil-cyan"
                     style={{ width: `${Math.min(historicalCoverage, 100)}%` }}
                   />
                 </div>
               </div>
 
-              <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
+              <div className="rounded-xl bg-white/3 border border-white/10 p-4">
                 <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-[0.2em] mb-2">
                   <Radio size={13} className="text-oil-gold" />
                   Granularity
@@ -1105,7 +1173,7 @@ function Dashboard() {
               </span>
               <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-oil-cyan to-oil-blue"
+                  className="h-full rounded-full bg-linear-to-r from-oil-cyan to-oil-blue"
                   initial={{ width: "0%" }}
                   animate={{ width: `${historicalProgress}%` }}
                   transition={{ duration: 0.4, ease: "easeOut" }}
@@ -1119,8 +1187,8 @@ function Dashboard() {
 
           {historicalLoading && (
             <div className="space-y-4">
-              <Skeleton className="h-[360px] rounded-3xl" />
-              <Skeleton className="h-[320px] rounded-3xl" />
+              <Skeleton className="h-90 rounded-3xl" />
+              <Skeleton className="h-80 rounded-3xl" />
             </div>
           )}
 
@@ -1150,14 +1218,14 @@ function Dashboard() {
               >
                 <div className="flex items-center justify-between mb-8">
                   <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                    <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-cyan to-oil-blue" />
+                    <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-blue" />
                     Historical Price Trend
                   </h3>
                   <span className="text-xs text-gray-500">
                     OHLC close price series
                   </span>
                 </div>
-                <div className="h-[400px] w-full">
+                <div className="h-100 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={historicalChartData}>
                       <CartesianGrid
@@ -1184,26 +1252,7 @@ function Dashboard() {
                         ]}
                         tickFormatter={(val) => `$${val.toFixed(0)}`}
                       />
-                      <Tooltip
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload?.length) return null;
-                          const point = payload[0].payload;
-                          return (
-                            <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[180px]">
-                              <p className="text-xs text-gray-400 mb-2">{label}</p>
-                              <p className="text-lg font-bold text-oil-cyan mb-1">
-                                ${point.price.toFixed(2)}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                O: {point.open.toFixed(2)}  H: {point.high.toFixed(2)}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                L: {point.low.toFixed(2)}
-                              </p>
-                            </div>
-                          );
-                        }}
-                      />
+                      <Tooltip content={<HistoricalPriceTooltip />} />
                       <Line
                         type="monotone"
                         dataKey="price"
@@ -1229,14 +1278,14 @@ function Dashboard() {
               >
                 <div className="flex items-center justify-between mb-8">
                   <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                    <div className="w-1 h-6 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
+                    <div className="w-1 h-6 rounded-full bg-linear-to-b from-emerald-400 to-red-400" />
                     Daily Change (%)
                   </h3>
                   <span className="text-xs text-gray-500">
                     Positive vs negative daily moves
                   </span>
                 </div>
-                <div className="h-[340px] w-full">
+                <div className="h-85 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={historicalChartData}>
                       <CartesianGrid
@@ -1259,20 +1308,7 @@ function Dashboard() {
                         axisLine={false}
                         tickFormatter={(val) => `${val}%`}
                       />
-                      <Tooltip
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload?.length) return null;
-                          const value = payload[0].value as number;
-                          return (
-                            <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-[180px]">
-                              <p className="text-xs text-gray-400 mb-2">{label}</p>
-                              <p className="text-lg font-bold text-oil-gold mb-1">
-                                Change : {Number(value ?? 0).toFixed(2)}%
-                              </p>
-                            </div>
-                          );
-                        }}
-                      />
+                      <Tooltip content={<HistoricalChangeTooltip />} />
                       <Bar
                         dataKey="changePct"
                         radius={[4, 4, 0, 0]}
@@ -1357,7 +1393,7 @@ function Dashboard() {
           {analyticsLoading && !analyticsData && (
             <div className="space-y-4">
               <Skeleton className="h-36 rounded-3xl" />
-              <Skeleton className="h-[420px] rounded-3xl" />
+              <Skeleton className="h-105 rounded-3xl" />
             </div>
           )}
 
@@ -1460,7 +1496,7 @@ function Dashboard() {
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
                     <div>
                       <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                        <div className="w-1 h-6 rounded-full bg-gradient-to-b from-emerald-300 to-oil-cyan" />
+                        <div className="w-1 h-6 rounded-full bg-linear-to-b from-emerald-300 to-oil-cyan" />
                         Actual vs Predicted Prices
                       </h3>
                       <p className="text-xs text-gray-500 mt-2">
@@ -1479,7 +1515,7 @@ function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="h-[420px] w-full">
+                  <div className="h-105 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={analyticsChartData}>
                         <CartesianGrid
@@ -1553,7 +1589,7 @@ function Dashboard() {
                 >
                   <div className="flex items-center justify-between mb-8">
                     <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                      <div className="w-1 h-6 rounded-full bg-gradient-to-b from-oil-cyan to-oil-blue" />
+                      <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-blue" />
                       Probabilistic Fan Chart
                     </h3>
                     <span className="text-xs text-gray-500">
@@ -1572,6 +1608,51 @@ function Dashboard() {
         </>
       )}
     </div>
+
+    {/* ── Explainability Panel ── */}
+    <AnimatePresence>
+      {explainOpen && explainLoading && (
+        <ExplainPanelSkeleton onClose={() => setExplainOpen(false)} />
+      )}
+      {explainOpen && !explainLoading && explainData && (
+        <ExplainPanel
+          data={explainData}
+          onClose={() => setExplainOpen(false)}
+        />
+      )}
+      {explainOpen && !explainLoading && explainError && !explainData && (
+        <motion.div
+          key="explain-error-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setExplainOpen(false)}
+        >
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="glass p-8 rounded-3xl max-w-md w-full m-4 text-center"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={24} className="text-red-400" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-2">Explain Failed</h3>
+            <p className="text-sm text-gray-400 mb-6">{explainError}</p>
+            <AnimatedButton
+              variant="primary"
+              onClick={() => { setExplainData(null); handleExplain(); }}
+              className="px-5 py-2.5 rounded-xl text-sm"
+            >
+              Retry
+            </AnimatedButton>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </>
   );
 }
 

@@ -1,4 +1,5 @@
 import {
+  ExplainResponse,
   FanResponse,
   HistoricalPricesResponse,
   NewsArticle,
@@ -15,6 +16,7 @@ const HISTORICAL_API_URL = `${BASE_API_URL}/historical/prices`;
 const NEWS_API_URL = `${BASE_API_URL}/news`;
 const UPLOAD_EXCEL_API_URL = `${BASE_API_URL}/predict/upload-excel`;
 const UPLOAD_EXCEL_TEMPLATE_URL = `${BASE_API_URL}/predict/upload-excel/template`;
+const EXPLAIN_API_URL = `${BASE_API_URL}/explain`;
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
 const EMPTY_DATE_RANGE = { start: "", end: "" };
 
@@ -676,3 +678,52 @@ export const uploadExcelFile = async (file: File): Promise<PredictionResponse> =
     throw err;
   }
 };
+
+const normalizeExplainResponse = (payload: unknown): ExplainResponse => {
+  const { root, response } = unwrapRecordPayload(payload);
+  const success = resolveSuccessFlag(root, response);
+
+  // model_contributions: flat object { arima: number, gru_mid: number, ... }
+  const rawContributions = isRecord(response.model_contributions)
+    ? response.model_contributions
+    : {};
+  const modelContributions: Record<string, number> = {};
+  for (const [key, val] of Object.entries(rawContributions)) {
+    modelContributions[key] = toFiniteNumberOrDefault(val);
+  }
+
+  // top_features: [{ feature_name, shap_value, feature_value }, ...]
+  const rawTopFeatures = Array.isArray(response.top_features) ? response.top_features : [];
+  const topFeatures = rawTopFeatures.filter(isRecord).map((item) => ({
+    feature_name: toStringOrDefault(item.feature_name),
+    shap_value: toFiniteNumberOrDefault(item.shap_value),
+    feature_value: toFiniteNumberOrDefault(item.feature_value),
+  }));
+
+  // sentiment_headlines: string[]
+  const rawHeadlines = Array.isArray(response.sentiment_headlines)
+    ? response.sentiment_headlines
+    : [];
+  const sentimentHeadlines = rawHeadlines
+    .map((h) => (typeof h === "string" ? h : toStringOrNull(h)))
+    .filter((h): h is string => h !== null);
+
+  return {
+    success,
+    explanation_date: toStringOrDefault(response.explanation_date),
+    prediction: toFiniteNumberOrDefault(response.prediction),
+    confidence_interval_lower: toFiniteNumberOrDefault(response.confidence_interval_lower),
+    confidence_interval_upper: toFiniteNumberOrDefault(response.confidence_interval_upper),
+    confidence_level: toStringOrDefault(response.confidence_level, "medium"),
+    agreement_score: toFiniteNumberOrDefault(response.agreement_score),
+    model_contributions: modelContributions,
+    top_features: topFeatures,
+    sentiment_headlines: sentimentHeadlines,
+    explanation_text: toStringOrDefault(response.explanation_text),
+    generated_at: toStringOrDefault(response.generated_at),
+    computation_time_seconds: toFiniteNumberOrDefault(response.computation_time_seconds),
+  };
+};
+
+export const fetchExplain = async (): Promise<ExplainResponse> =>
+  normalizeExplainResponse(await fetchJson<unknown>(EXPLAIN_API_URL));

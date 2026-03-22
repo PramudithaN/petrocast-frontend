@@ -108,3 +108,27 @@ export interface NewsResponse {
   articles: NewsArticle[];
   dates: string[];
 }
+
+/* ─── Explainability ─── */
+
+export interface ExplainTopFeature {
+  feature_name: string;
+  shap_value: number;
+  feature_value: number;
+}
+
+export interface ExplainResponse {
+  success: boolean;
+  explanation_date: string;
+  prediction: number;
+  confidence_interval_lower: number;
+  confidence_interval_upper: number;
+  confidence_level: string;
+  agreement_score: number;
+  model_contributions: Record<string, number>;
+  top_features: ExplainTopFeature[];
+  sentiment_headlines: string[];
+  explanation_text: string;
+  generated_at: string;
+  computation_time_seconds: number;
+}
