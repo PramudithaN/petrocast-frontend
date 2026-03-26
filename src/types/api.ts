@@ -114,21 +114,42 @@ export interface NewsResponse {
 export interface ExplainTopFeature {
   feature_name: string;
   shap_value: number;
+  shap_value_usd?: number;
   feature_value: number;
+  direction?: string;
+  category?: string;
+}
+
+export interface ExplainAttentionInsight {
+  top_sentiment_feature?: string;
+  top_timestep_lag?: number;
+  attention_weight?: number;
+  high_news_regime_flagged?: boolean;
 }
 
 export interface ExplainResponse {
   success: boolean;
   explanation_date: string;
   prediction: number;
+  current_price?: number;
+  direction?: string;
+  horizon?: number;
+  model_version?: string;
   confidence_interval_lower: number;
   confidence_interval_upper: number;
   confidence_level: string;
   agreement_score: number;
+  dominant_model?: string;
+  total_sentiment_impact_usd?: number;
+  sentiment_dominant?: boolean;
   model_contributions: Record<string, number>;
   top_features: ExplainTopFeature[];
   sentiment_headlines: string[];
+  headline?: string;
   explanation_text: string;
+  sentiment_story?: string;
+  risk_note?: string;
+  attention_insight?: ExplainAttentionInsight;
   generated_at: string;
   computation_time_seconds: number;
 }

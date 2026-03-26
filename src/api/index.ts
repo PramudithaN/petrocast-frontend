@@ -679,49 +679,207 @@ export const uploadExcelFile = async (file: File): Promise<PredictionResponse> =
   }
 };
 
+const EXPLAIN_CONTRIBUTION_KEY_ALIASES: Record<string, string> = {
+  arima_contribution_usd: "arima",
+  mid_gru_contribution_usd: "gru_mid",
+  sentiment_gru_contribution_usd: "gru_sent",
+  xgboost_contribution_usd: "xgb_hf",
+};
+
+const normalizeExplainContributionKey = (key: string): string => {
+  const normalized = key.toLowerCase();
+  return (
+    EXPLAIN_CONTRIBUTION_KEY_ALIASES[normalized] ??
+    normalized.replace(/_contribution_usd$/, "")
+  );
+};
+
+const getExplainContributionSource = (
+  response: Record<string, unknown>,
+): Record<string, unknown> => {
+  if (isRecord(response.model_contributions)) {
+    return response.model_contributions;
+  }
+
+  if (isRecord(response.sub_model_contributions)) {
+    return response.sub_model_contributions;
+  }
+
+  return {};
+};
+
+const getExplainTopFeaturesSource = (response: Record<string, unknown>): unknown[] => {
+  if (Array.isArray(response.top_features)) {
+    return response.top_features;
+  }
+
+  if (Array.isArray(response.top_feature_drivers)) {
+    return response.top_feature_drivers;
+  }
+
+  return [];
+};
+
+const deriveExplainConfidenceLevel = (response: Record<string, unknown>): string => {
+  const explicitLevel = toStringOrDefault(response.confidence_level);
+  if (explicitLevel) return explicitLevel;
+
+  const horizonAccuracy = toFiniteNumberOrNull(response.horizon_accuracy);
+  if (horizonAccuracy === null) return "medium";
+  if (horizonAccuracy >= 70) return "high";
+  if (horizonAccuracy >= 40) return "medium";
+  return "low";
+};
+
+const getExplainConfidenceBounds = (
+  response: Record<string, unknown>,
+): { lower: number; upper: number } => {
+  const rawConfidenceInterval = response.confidence_interval;
+  const confidenceIntervalRecord = isRecord(rawConfidenceInterval)
+    ? rawConfidenceInterval
+    : null;
+  const confidenceIntervalArray = Array.isArray(rawConfidenceInterval)
+    ? rawConfidenceInterval
+    : null;
+
+  return {
+    lower:
+      toFiniteNumberOrNull(response.confidence_interval_lower) ??
+      toFiniteNumberOrNull(confidenceIntervalRecord?.lower) ??
+      toFiniteNumberOrNull(confidenceIntervalRecord?.min) ??
+      toFiniteNumberOrNull(confidenceIntervalArray?.[0]) ??
+      0,
+    upper:
+      toFiniteNumberOrNull(response.confidence_interval_upper) ??
+      toFiniteNumberOrNull(confidenceIntervalRecord?.upper) ??
+      toFiniteNumberOrNull(confidenceIntervalRecord?.max) ??
+      toFiniteNumberOrNull(confidenceIntervalArray?.[1]) ??
+      0,
+  };
+};
+
 const normalizeExplainResponse = (payload: unknown): ExplainResponse => {
   const { root, response } = unwrapRecordPayload(payload);
   const success = resolveSuccessFlag(root, response);
+  const confidenceBounds = getExplainConfidenceBounds(response);
 
-  // model_contributions: flat object { arima: number, gru_mid: number, ... }
-  const rawContributions = isRecord(response.model_contributions)
-    ? response.model_contributions
-    : {};
   const modelContributions: Record<string, number> = {};
-  for (const [key, val] of Object.entries(rawContributions)) {
-    modelContributions[key] = toFiniteNumberOrDefault(val);
+  for (const [key, value] of Object.entries(getExplainContributionSource(response))) {
+    const contribution = toFiniteNumberOrNull(value);
+    if (contribution === null) continue;
+
+    const normalizedKey = normalizeExplainContributionKey(key);
+    modelContributions[normalizedKey] =
+      (modelContributions[normalizedKey] ?? 0) + contribution;
   }
 
-  // top_features: [{ feature_name, shap_value, feature_value }, ...]
-  const rawTopFeatures = Array.isArray(response.top_features) ? response.top_features : [];
-  const topFeatures = rawTopFeatures.filter(isRecord).map((item) => ({
-    feature_name: toStringOrDefault(item.feature_name),
-    shap_value: toFiniteNumberOrDefault(item.shap_value),
-    feature_value: toFiniteNumberOrDefault(item.feature_value),
-  }));
+  const topFeatures = getExplainTopFeaturesSource(response)
+    .filter(isRecord)
+    .map((item) => ({
+      feature_name:
+        toStringOrDefault(item.feature_name) ||
+        toStringOrDefault(item.feature) ||
+        toStringOrDefault(item.name),
+      shap_value:
+        toFiniteNumberOrDefault(item.shap_value) ||
+        toFiniteNumberOrDefault(item.shap_value_usd),
+      shap_value_usd: toFiniteNumberOrNull(item.shap_value_usd) ?? undefined,
+      feature_value: toFiniteNumberOrDefault(item.feature_value),
+      direction: toStringOrNull(item.direction) ?? undefined,
+      category: toStringOrNull(item.category) ?? undefined,
+    }))
+    .filter((item) => item.feature_name.length > 0);
 
-  // sentiment_headlines: string[]
-  const rawHeadlines = Array.isArray(response.sentiment_headlines)
+  const sentimentHeadlines = (Array.isArray(response.sentiment_headlines)
     ? response.sentiment_headlines
-    : [];
-  const sentimentHeadlines = rawHeadlines
-    .map((h) => (typeof h === "string" ? h : toStringOrNull(h)))
-    .filter((h): h is string => h !== null);
+    : []
+  )
+    .map((headline) => {
+      if (typeof headline === "string") return headline;
+      if (!isRecord(headline)) return null;
+
+      return (
+        toStringOrNull(headline.headline) ??
+        toStringOrNull(headline.title) ??
+        toStringOrNull(headline.summary)
+      );
+    })
+    .filter((headline): headline is string => headline !== null);
+
+  const attentionInsight = isRecord(response.attention_insight)
+    ? {
+      top_sentiment_feature:
+        toStringOrNull(response.attention_insight.top_sentiment_feature) ??
+        undefined,
+      top_timestep_lag:
+        toFiniteNumberOrNull(response.attention_insight.top_timestep_lag) ??
+        undefined,
+      attention_weight:
+        toFiniteNumberOrNull(response.attention_insight.attention_weight) ??
+        undefined,
+      high_news_regime_flagged:
+        typeof response.attention_insight.high_news_regime_flagged === "boolean"
+          ? response.attention_insight.high_news_regime_flagged
+          : undefined,
+    }
+    : undefined;
+
+  const dominantModel =
+    toStringOrNull(response.dominant_model) ??
+    (isRecord(response.sub_model_contributions)
+      ? toStringOrNull(response.sub_model_contributions.dominant_model)
+      : null) ??
+    (isRecord(response.model_weights)
+      ? toStringOrNull(response.model_weights.dominant_model)
+      : null) ??
+    undefined;
 
   return {
     success,
-    explanation_date: toStringOrDefault(response.explanation_date),
-    prediction: toFiniteNumberOrDefault(response.prediction),
-    confidence_interval_lower: toFiniteNumberOrDefault(response.confidence_interval_lower),
-    confidence_interval_upper: toFiniteNumberOrDefault(response.confidence_interval_upper),
-    confidence_level: toStringOrDefault(response.confidence_level, "medium"),
-    agreement_score: toFiniteNumberOrDefault(response.agreement_score),
+    explanation_date:
+      toStringOrDefault(response.explanation_date) ||
+      toStringOrDefault(response.date),
+    prediction:
+      toFiniteNumberOrNull(response.prediction) ??
+      toFiniteNumberOrDefault(response.forecast_price),
+    current_price:
+      toFiniteNumberOrNull(response.current_price) ?? undefined,
+    direction: toStringOrNull(response.direction) ?? undefined,
+    horizon: toFiniteNumberOrNull(response.horizon) ?? undefined,
+    model_version: toStringOrNull(response.model_version) ?? undefined,
+    confidence_interval_lower: confidenceBounds.lower,
+    confidence_interval_upper: confidenceBounds.upper,
+    confidence_level: deriveExplainConfidenceLevel(response),
+    agreement_score:
+      toFiniteNumberOrNull(response.agreement_score) ??
+      toFiniteNumberOrDefault(response.model_agreement),
+    dominant_model: dominantModel,
+    total_sentiment_impact_usd:
+      toFiniteNumberOrNull(response.total_sentiment_impact_usd) ?? undefined,
+    sentiment_dominant:
+      typeof response.sentiment_dominant === "boolean"
+        ? response.sentiment_dominant
+        : undefined,
     model_contributions: modelContributions,
     top_features: topFeatures,
     sentiment_headlines: sentimentHeadlines,
-    explanation_text: toStringOrDefault(response.explanation_text),
-    generated_at: toStringOrDefault(response.generated_at),
-    computation_time_seconds: toFiniteNumberOrDefault(response.computation_time_seconds),
+    headline: toStringOrNull(response.headline) ?? undefined,
+    explanation_text:
+      toStringOrDefault(response.explanation_text) ||
+      toStringOrDefault(response.forecast_analysis) ||
+      toStringOrDefault(response.summary) ||
+      toStringOrDefault(response.narrative) ||
+      toStringOrDefault(response.headline),
+    sentiment_story: toStringOrNull(response.sentiment_story) ?? undefined,
+    risk_note: toStringOrNull(response.risk_note) ?? undefined,
+    attention_insight: attentionInsight,
+    generated_at:
+      toStringOrDefault(response.generated_at) ||
+      toStringOrDefault(response.created_at) ||
+      toStringOrDefault(response.date),
+    computation_time_seconds:
+      toFiniteNumberOrNull(response.computation_time_seconds) ??
+      toFiniteNumberOrDefault(response.inference_time_seconds),
   };
 };
 

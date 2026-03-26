@@ -83,6 +83,10 @@ const ExplainPanelBone = ({ className = "" }: Readonly<{ className?: string }>) 
 export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelProps>) {
   const confLevel = data.confidence_level.toLowerCase();
   const confStyle = CONFIDENCE_STYLE[confLevel] ?? CONFIDENCE_STYLE.medium;
+  const forecastAnalysis = data.explanation_text.trim();
+  const directionLabel = data.direction ? data.direction.toUpperCase() : "";
+  const horizonLabel = data.horizon ? `(H${data.horizon})` : "";
+  const forecastMetaLabel = [directionLabel, horizonLabel].filter(Boolean).join(" ");
 
   /* Model contributions chart data */
   const modelChartData = Object.entries(data.model_contributions).map(
@@ -91,8 +95,8 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
       return { name: meta.label, value, color: meta.color };
     },
   );
-  const maxContribution = Math.max(
-    ...modelChartData.map((d) => d.value),
+  const maxContributionAbs = Math.max(
+    ...modelChartData.map((d) => Math.abs(d.value)),
     0.001,
   );
 
@@ -200,7 +204,7 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
                   ${data.prediction.toFixed(2)}
                 </div>
                 <div className="mt-1.5 text-[11px] text-gray-500">
-                  Brent Crude / barrel
+                  {forecastMetaLabel || "Brent Crude / barrel"}
                 </div>
               </motion.div>
 
@@ -285,10 +289,25 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
                   {data.agreement_score.toFixed(4)}
                 </div>
                 <div className="mt-1.5 text-[11px] text-gray-500">
-                  Lower = higher consensus
+                  {data.dominant_model
+                    ? `Dominant: ${data.dominant_model}`
+                    : "Lower = higher consensus"}
                 </div>
               </motion.div>
             </div>
+
+            {data.headline && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.22 }}
+                className="glass p-4 rounded-2xl border border-oil-gold/20"
+              >
+                <p className="text-sm text-oil-light-gold leading-relaxed font-medium">
+                  {data.headline}
+                </p>
+              </motion.div>
+            )}
 
             {/* ── Sub-model Contributions + Top Feature Drivers ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -318,7 +337,7 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{
-                            width: `${(model.value / maxContribution) * 100}%`,
+                            width: `${(Math.abs(model.value) / maxContributionAbs) * 100}%`,
                           }}
                           transition={{
                             duration: 0.9,
@@ -391,6 +410,15 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
                     const barColor = isPos ? "#10b981" : "#ef4444";
                     const pct =
                       (Math.abs(feature.shap_value) / maxShapAbs) * 100;
+                    let shapDisplayValue = `${feature.shap_value.toFixed(6)}`;
+                    if (isPos) {
+                      shapDisplayValue = `+${feature.shap_value.toFixed(6)}`;
+                    }
+
+                    if (typeof feature.shap_value_usd === "number") {
+                      const usdPrefix = feature.shap_value_usd >= 0 ? "+" : "";
+                      shapDisplayValue = `${usdPrefix}$${feature.shap_value_usd.toFixed(3)}`;
+                    }
 
                     return (
                       <motion.div
@@ -411,11 +439,20 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
                             <span
                               className={`text-xs font-mono font-semibold ${isPos ? "text-emerald-400" : "text-red-400"}`}
                             >
-                              {isPos ? "+" : ""}
-                              {feature.shap_value.toFixed(6)}
+                              {shapDisplayValue}
                             </span>
                           </div>
                         </div>
+                        {(feature.direction || feature.category) && (
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider">
+                            {feature.direction && (
+                              <span className="text-gray-500">{feature.direction}</span>
+                            )}
+                            {feature.category && (
+                              <span className="text-gray-600">{feature.category}</span>
+                            )}
+                          </div>
+                        )}
                         <div className="relative h-1.5 bg-white/5 rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
@@ -478,10 +515,54 @@ export default function ExplainPanel({ data, onClose }: Readonly<ExplainPanelPro
               className="glass p-5 rounded-2xl"
             >
               <SectionHeader dot="#f59e0b">Forecast Analysis</SectionHeader>
-              <p className="text-sm text-gray-300 leading-relaxed">
-                {data.explanation_text}
-              </p>
+              {forecastAnalysis ? (
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  {forecastAnalysis}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  No narrative text was returned by the explain endpoint for this date.
+                </p>
+              )}
             </motion.div>
+
+            {(data.sentiment_story || data.risk_note || data.attention_insight || data.total_sentiment_impact_usd !== undefined) && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.48 }}
+                className="glass p-5 rounded-2xl"
+              >
+                <SectionHeader dot="#10b981">Explainability Notes</SectionHeader>
+                <div className="space-y-3 text-sm leading-relaxed">
+                  {data.total_sentiment_impact_usd !== undefined && (
+                    <p className="text-gray-300">
+                      Net sentiment impact: <span className="font-mono text-white">{data.total_sentiment_impact_usd >= 0 ? "+" : ""}${data.total_sentiment_impact_usd.toFixed(4)}</span>
+                      {data.sentiment_dominant !== undefined && (
+                        <span className="text-gray-500"> {data.sentiment_dominant ? "(sentiment-dominant)" : "(not sentiment-dominant)"}</span>
+                      )}
+                    </p>
+                  )}
+                  {data.sentiment_story && (
+                    <p className="text-gray-300">{data.sentiment_story}</p>
+                  )}
+                  {data.attention_insight?.top_sentiment_feature && (
+                    <p className="text-gray-400">
+                      Top sentiment feature: <span className="text-gray-200 font-mono">{data.attention_insight.top_sentiment_feature}</span>
+                      {typeof data.attention_insight.top_timestep_lag === "number" && (
+                        <span> • lag t-{data.attention_insight.top_timestep_lag}</span>
+                      )}
+                      {typeof data.attention_insight.attention_weight === "number" && (
+                        <span> • weight {data.attention_insight.attention_weight.toFixed(4)}</span>
+                      )}
+                    </p>
+                  )}
+                  {data.risk_note && (
+                    <p className="text-amber-200/90">Risk note: {data.risk_note}</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
 
             {/* ── Meta footer ── */}
             <motion.div
