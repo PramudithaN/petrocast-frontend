@@ -5,9 +5,12 @@ A React TypeScript project built with Vite.
 ## Repository Status
 
 ![Branch](https://img.shields.io/badge/branch-main-blue)
-![Status](https://img.shields.io/badge/status-clean-brightgreen)
+![Vercel](https://img.shields.io/badge/Vercel-passing-brightgreen)
+![SonarCloud](https://img.shields.io/badge/SonarCloud-passing-brightgreen)
+![CodeQL](https://img.shields.io/badge/CodeQL-passing-brightgreen)
+![Codefactor](https://img.shields.io/badge/Codefactor-A-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-Vitest-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-green)
-![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Tech Stack
 
