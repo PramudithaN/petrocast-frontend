@@ -2,6 +2,13 @@
 
 A React TypeScript project built with Vite.
 
+## Repository Status
+
+![Branch](https://img.shields.io/badge/branch-main-blue)
+![Status](https://img.shields.io/badge/status-clean-brightgreen)
+![Node](https://img.shields.io/badge/node-%3E%3D18-green)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 ## Tech Stack
 
 - **React 18+** - UI library
