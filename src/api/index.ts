@@ -742,8 +742,14 @@ export interface FetchSentimentOverviewOptions {
   endDate?: string;
   includeHeadlines?: boolean;
   headlinesPerDay?: number;
+  limit?: number;
+  offset?: number;
 }
 
+/**
+ * Fetches sentiment overview data for a given date range with optional pagination support.
+ * Supports both days-based and date range queries, with optional limit/offset for pagination.
+ */
 export const fetchSentimentOverview = async (
   options?: FetchSentimentOverviewOptions,
 ): Promise<SentimentOverviewResponse> => {
@@ -769,6 +775,14 @@ export const fetchSentimentOverview = async (
     params.set("headlines_per_day", String(options.headlinesPerDay));
   }
 
+  if (typeof options?.limit === "number") {
+    params.set("limit", String(options.limit));
+  }
+
+  if (typeof options?.offset === "number") {
+    params.set("offset", String(options.offset));
+  }
+
   const query = params.toString();
   const url = query
     ? `${SENTIMENT_OVERVIEW_API_URL}?${query}`
@@ -776,6 +790,34 @@ export const fetchSentimentOverview = async (
 
   const payload = await fetchJson<unknown>(url);
   return normalizeSentimentOverviewResponse(payload);
+};
+
+/**
+ * Fetches sentiment overview data for a date range, with optional progress tracking.
+ * For large date ranges (e.g., 2014-2025), the backend returns all available sentiment data.
+ */
+export const fetchSentimentProgressively = async (
+  startDate?: string,
+  endDate?: string,
+  onProgress?: (partial: SentimentOverviewResponse, progress: number) => void,
+): Promise<SentimentOverviewResponse> => {
+  const options: FetchSentimentOverviewOptions = {
+    startDate,
+    endDate,
+    includeHeadlines: false,
+  };
+
+  if (onProgress) {
+    onProgress({ success: true, meta: {} as any, summary: {} as any, timeline: [] }, 50);
+  }
+
+  const result = await fetchSentimentOverview(options);
+
+  if (onProgress) {
+    onProgress(result, 100);
+  }
+
+  return result;
 };
 
 /**

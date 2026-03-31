@@ -15,7 +15,7 @@ import {
   fetchPredictionComparison as fetchPredictionComparisonApi,
   fetchPredictions as fetchPredictionsApi,
   fetchExplain as fetchExplainApi,
-  fetchSentimentOverview as fetchSentimentOverviewApi,
+  fetchSentimentProgressively as fetchSentimentProgressivelyApi,
   getCachedPrediction,
 } from "../api";
 import {
@@ -310,21 +310,7 @@ const getTodayDateInputValue = () => {
 };
 
 const DEFAULT_ANALYTICS_END_DATE = getTodayDateInputValue();
-const FALLBACK_SENTIMENT_RANGE_DAYS = 4500;
-
 const toDateOnly = (value: string): string => value.split("T")[0];
-
-const getInclusiveDateSpanDays = (startDate: string, endDate: string): number => {
-  const startMs = Date.parse(startDate);
-  const endMs = Date.parse(endDate);
-
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
-    return FALLBACK_SENTIMENT_RANGE_DAYS;
-  }
-
-  const msPerDay = 24 * 60 * 60 * 1000;
-  return Math.max(1, Math.floor((endMs - startMs) / msPerDay) + 1);
-};
 
 type DashboardTab = "forecast" | "historical" | "analytics";
 type DashboardNotificationScope =
@@ -355,6 +341,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const [loading, setLoading] = useState<boolean>(!initialCachedPrediction);
   const [historicalLoading, setHistoricalLoading] = useState<boolean>(true);
   const [sentimentLoading, setSentimentLoading] = useState<boolean>(true);
+  const [sentimentProgress, setSentimentProgress] = useState<number>(0);
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(true);
   const [historicalProgress, setHistoricalProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -511,17 +498,14 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     try {
       setSentimentLoading(true);
       setSentimentError(null);
-      const fallbackDays =
-        startDate && endDate
-          ? getInclusiveDateSpanDays(startDate, endDate)
-          : FALLBACK_SENTIMENT_RANGE_DAYS;
-      const result = await fetchSentimentOverviewApi({
-        days: fallbackDays,
-        startDate,
-        endDate,
-        includeHeadlines: false,
+      setSentimentProgress(0);
+      await fetchSentimentProgressivelyApi(startDate, endDate, (partial, progress) => {
+        setSentimentData(partial);
+        setSentimentProgress(progress);
+        if (progress >= 100) {
+          setSentimentLoading(false);
+        }
       });
-      setSentimentData(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch sentiment overview";
       setSentimentError(msg);
@@ -530,7 +514,6 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
         title: "Sentiment data unavailable",
         message: msg,
       });
-    } finally {
       setSentimentLoading(false);
     }
   };
@@ -824,27 +807,17 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     changePct: item.change_pct,
     rawDate: item.date,
   }));
-  const historicalRangeStart = historicalData?.date_range?.start
-    ? toDateOnly(historicalData.date_range.start)
-    : null;
-  const historicalRangeEnd = historicalData?.date_range?.end
-    ? toDateOnly(historicalData.date_range.end)
-    : null;
 
-  const sentimentChartData = (sentimentData?.timeline ?? [])
-    .filter((item) => {
-      const itemDate = toDateOnly(item.date);
-      if (!historicalRangeStart || !historicalRangeEnd) return true;
-      return itemDate >= historicalRangeStart && itemDate <= historicalRangeEnd;
-    })
-    .map((item) => ({
-      date: dateUtils.format(item.date, "short"),
-      rawDate: item.date,
-      rawSentiment: item.raw_daily_sentiment,
-      decayedSentiment: item.cross_day_decayed_sentiment,
-      newsVolume: item.news_volume,
-      highNewsRegime: item.high_news_regime,
-    }));
+  // Display all sentiment data without additional filtering
+  // (sentiment is already fetched for the historical date range)
+  const sentimentChartData = (sentimentData?.timeline ?? []).map((item) => ({
+    date: dateUtils.format(item.date, "short"),
+    rawDate: item.date,
+    rawSentiment: item.raw_daily_sentiment,
+    decayedSentiment: item.cross_day_decayed_sentiment,
+    newsVolume: item.news_volume,
+    highNewsRegime: item.high_news_regime,
+  }));
 
   const historicalPriceValues = historicalChartData.map((d) => d.price);
   const historicalMinPrice = historicalPriceValues.length
@@ -1140,31 +1113,34 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
           </div>
 
           {/* Main Chart */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
-            className="glass p-6 md:p-8 rounded-3xl"
-          >
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-gold" />
-                Price Trajectory
-              </h3>
-              <div className="flex items-center gap-5 text-xs">
-                <span className="flex items-center gap-1.5 text-gray-400">
-                  <div className="w-2.5 h-2.5 rounded-full bg-oil-cyan" />
-                  Actual
-                </span>
-                <span className="flex items-center gap-1.5 text-gray-400">
-                  <div className="w-2.5 h-2.5 rounded-full bg-oil-gold" />
-                  Forecast
-                </span>
+          {analyticsLoading ? (
+            <Skeleton className="h-112.5 rounded-3xl" />
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="glass p-6 md:p-8 rounded-3xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
+                  <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-gold" />
+                  Price Trajectory
+                </h3>
+                <div className="flex items-center gap-5 text-xs">
+                  <span className="flex items-center gap-1.5 text-gray-400">
+                    <div className="w-2.5 h-2.5 rounded-full bg-oil-cyan" />
+                    Actual
+                  </span>
+                  <span className="flex items-center gap-1.5 text-gray-400">
+                    <div className="w-2.5 h-2.5 rounded-full bg-oil-gold" />
+                    Forecast
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="h-100 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
+              <div className="h-100 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06B6D4" stopOpacity={0.2} />
@@ -1252,29 +1228,33 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </motion.div>
+            </motion.div>
+          )}
 
           {/* Price Range Bar */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55 }}
-            className="glass p-6 rounded-2xl"
-          >
-            <div className="flex items-center justify-between text-sm mb-3">
-              <span className="text-gray-500 font-medium">
-                Forecast Price Range
-              </span>
-              <span className="text-gray-400 font-mono text-xs">
-                ${minPrice.toFixed(2)} — ${maxPrice.toFixed(2)}
-              </span>
-            </div>
-            <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: "100%" }}
-                transition={{ duration: 1.5, ease: "easeOut" }}
-                className="absolute inset-y-0 left-0 bg-linear-to-r from-oil-amber via-oil-gold to-oil-light-gold rounded-full"
+          {analyticsLoading ? (
+            <Skeleton className="h-16 rounded-2xl" />
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 }}
+              className="glass p-6 rounded-2xl"
+            >
+              <div className="flex items-center justify-between text-sm mb-3">
+                <span className="text-gray-500 font-medium">
+                  Forecast Price Range
+                </span>
+                <span className="text-gray-400 font-mono text-xs">
+                  ${minPrice.toFixed(2)} — ${maxPrice.toFixed(2)}
+                </span>
+              </div>
+              <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: "100%" }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  className="absolute inset-y-0 left-0 bg-linear-to-r from-oil-amber via-oil-gold to-oil-light-gold rounded-full"
               />
               {/* Current price indicator */}
               <motion.div
@@ -1286,7 +1266,8 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                 className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white border-2 border-oil-gold shadow-lg"
               />
             </div>
-          </motion.div>
+            </motion.div>
+          )}
 
           {/* Data Table */}
           <motion.div
@@ -1542,6 +1523,31 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
 
               {sentimentLoading && (
                 <Skeleton className="h-95 rounded-3xl" />
+              )}
+
+              {/* Inline progress bar while sentiment pages are still streaming in */}
+              {sentimentProgress < 100 && !sentimentLoading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="rounded-2xl glass px-5 py-3 flex items-center gap-4"
+                >
+                  <span className="text-xs text-gray-400 shrink-0">
+                    Loading sentiment&hellip;
+                  </span>
+                  <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-linear-to-r from-oil-gold to-oil-cyan"
+                      initial={{ width: "0%" }}
+                      animate={{ width: `${sentimentProgress}%` }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 shrink-0 font-mono">
+                    {Math.round(sentimentProgress)}%
+                  </span>
+                </motion.div>
               )}
 
               {!sentimentLoading && sentimentError && (
