@@ -1,6 +1,7 @@
 import AboutHeaderSection from "./about/AboutHeaderSection";
 import MetricsSection from "./about/MetricsSection";
 import PipelineSection from "./about/PipelineSection";
+import ModelDetailsSection from "./about/ModelDetailsSection";
 import CapabilitiesSection from "./about/CapabilitiesSection";
 import TechStackSection from "./about/TechStackSection";
 import AboutCtaSection from "./about/AboutCtaSection";
@@ -24,6 +25,7 @@ const About = () => {
         <AboutHeaderSection />
         <MetricsSection />
         <PipelineSection />
+        <ModelDetailsSection />
         <CapabilitiesSection />
         <TechStackSection />
         <AboutCtaSection />

@@ -2,10 +2,10 @@ import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import {
   Database,
-  Newspaper,
+  Layers,
   LineChart,
   BrainCircuit,
-  BarChart3,
+  Gauge,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -66,7 +66,7 @@ const PipelineStep = ({
             type: "spring",
             stiffness: 200,
           }}
-          className="w-12 h-12 rounded-2xl bg-gradient-to-br from-oil-gold/20 to-oil-amber/10 border border-oil-gold/20 flex items-center justify-center text-oil-gold z-10"
+          className="w-12 h-12 rounded-2xl bg-linear-to-br from-oil-gold/20 to-oil-amber/10 border border-oil-gold/20 flex items-center justify-center text-oil-gold z-10"
         >
           {icon}
         </motion.div>
@@ -75,7 +75,7 @@ const PipelineStep = ({
             initial={{ height: 0 }}
             animate={inView ? { height: "100%" } : { height: 0 }}
             transition={{ delay: delay * 0.1 + 0.4, duration: 0.5 }}
-            className="w-px bg-gradient-to-b from-oil-gold/30 to-transparent flex-1 mt-2"
+            className="w-px bg-linear-to-b from-oil-gold/30 to-transparent flex-1 mt-2"
           />
         )}
       </div>
@@ -96,36 +96,43 @@ const PipelineStep = ({
 };
 
 const PipelineSection = () => {
+  const pipelineHighlights = [
+    { label: "VMD Modes", value: "3 (trend / mid / high)" },
+    { label: "Forecast Horizons", value: "H5, H7, H14" },
+    { label: "Train / Val / Test", value: "70% / 15% / 15%" },
+    { label: "Stacking", value: "Ridge (alpha=1.0, 5-fold WF-CV)" },
+  ];
+
   const pipeline = [
     {
       icon: <Database size={20} />,
       step: "01",
-      title: "Data Collection & Storage",
-      desc: "Historical Brent crude prices from Yahoo Finance, macroeconomic indicators, and real-time news articles are collected and stored in a structured SQLite database.",
+      title: "Data Ingestion & Alignment",
+      desc: "Daily Brent close prices and lagged sentiment/news signals are aligned by trading date. The working data window spans 2014 to 2026 (~3,000 trading days).",
     },
     {
-      icon: <Newspaper size={20} />,
+      icon: <Layers size={20} />,
       step: "02",
-      title: "NLP Sentiment Analysis",
-      desc: "News articles are processed through FinBERT, a financial domain-specific transformer, to extract sentiment scores with temporal decay weighting.",
+      title: "VMD Signal Decomposition",
+      desc: "Log-return series is decomposed into K=3 modes using VMD (alpha=2000, tau=0, DC=0, init=1, tol=1e-7) to isolate trend, mid-frequency, and high-frequency behavior.",
     },
     {
       icon: <LineChart size={20} />,
       step: "03",
-      title: "VMD Signal Decomposition",
-      desc: "Variational Mode Decomposition separates the log-return series into trend, mid-frequency, and high-frequency components for targeted modeling.",
+      title: "Feature Engineering",
+      desc: "Builds 30 model features: 14 price/technical (returns, lags, RSI, momentum, volatility) + 16 sentiment/news and EMA features. Sentiment features are lagged by 1 day to prevent leakage.",
     },
     {
       icon: <BrainCircuit size={20} />,
       step: "04",
-      title: "Deep Learning Ensemble",
-      desc: "Component-specific LSTM and Transformer models generate predictions, which are combined and inverse-transformed to produce final price forecasts.",
+      title: "Specialist Sub-Model Inference",
+      desc: "ARIMA models trend mode, Mid-GRU learns price cycles, Sentiment-GRU fuses price and sentiment streams with attention, and XGBoost-HF captures high-frequency structure using direct multi-step prediction.",
     },
     {
-      icon: <BarChart3 size={20} />,
+      icon: <Gauge size={20} />,
       step: "05",
-      title: "Forecast Delivery",
-      desc: "Multi-horizon price predictions are served via a FastAPI backend with interactive visualizations and detailed analytics for end users.",
+      title: "Stacking, Evaluation & Delivery",
+      desc: "Per-horizon Ridge meta-models combine the four sub-model outputs, then forecasts are evaluated (RMSE, MAE, MAPE, USD error, directional metrics) and served to forecast, fan, analytics, and explainability views.",
     },
   ];
 
@@ -142,9 +149,37 @@ const PipelineSection = () => {
           variants={childFade}
           className="text-2xl md:text-3xl font-bold text-white font-display flex items-center gap-3"
         >
-          <div className="w-1 h-8 rounded-full bg-gradient-to-b from-oil-gold to-oil-amber" />
+          <div className="w-1 h-8 rounded-full bg-linear-to-b from-oil-gold to-oil-amber" />
           Prediction Pipeline
         </motion.h2>
+        <motion.p
+          variants={childFade}
+          className="text-sm text-gray-400 mt-3 max-w-3xl leading-relaxed"
+        >
+          Updated to reflect the documented VMD-based ensemble architecture (v10), including
+          decomposition-first modeling, horizon-specific stacking, and leakage-safe sentiment usage.
+        </motion.p>
+      </motion.div>
+
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+        variants={stagger}
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-8"
+      >
+        {pipelineHighlights.map((item) => (
+          <motion.div
+            key={item.label}
+            variants={childFade}
+            className="glass rounded-xl p-4 border border-white/10"
+          >
+            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-500 mb-2">
+              {item.label}
+            </div>
+            <div className="text-sm font-semibold text-white">{item.value}</div>
+          </motion.div>
+        ))}
       </motion.div>
 
       <div className="pl-2">
