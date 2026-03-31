@@ -166,17 +166,39 @@ const SentimentGauge = ({ value }: { value: number }) => {
 /* ─── Custom Chart Tooltip ─── */
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
-  const value = parseFiniteNumber(payload[0]?.value);
-  const displayValue =
-    value === null ? String(payload[0]?.value ?? "-") : formatCurrency(value);
+  const point = payload[0]?.payload;
+  if (!point) return null;
+
+  const actualVal = parseFiniteNumber(point.actualPrice);
+  const forecastVal = parseFiniteNumber(point.forecastPrice);
+  const isBridge = actualVal !== null && forecastVal !== null;
 
   return (
-    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-40">
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-44">
       <p className="text-xs text-gray-400 mb-2">{label}</p>
-      <p className="text-xl font-bold text-oil-gold font-display">{displayValue}</p>
-      <p className="text-xs text-gray-500 mt-1">
-        {payload[0]?.payload?.type === "Historical" ? "● Actual" : "◐ Forecast"}
-      </p>
+      {actualVal !== null && (
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-2 h-2 rounded-full bg-oil-cyan" />
+          <span className="text-xs text-gray-500">Actual</span>
+          <span className="text-lg font-bold text-oil-cyan font-display ml-auto">
+            {formatCurrency(actualVal)}
+          </span>
+        </div>
+      )}
+      {forecastVal !== null && (
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-oil-gold" />
+          <span className="text-xs text-gray-500">Forecast</span>
+          <span className="text-lg font-bold text-oil-gold font-display ml-auto">
+            {formatCurrency(forecastVal)}
+          </span>
+        </div>
+      )}
+      {!isBridge && (
+        <p className="text-xs text-gray-500 mt-1.5">
+          {actualVal !== null ? "● Actual Price" : "◐ Forecasted"}
+        </p>
+      )}
     </div>
   );
 };
@@ -564,20 +586,59 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const isPositive = priceChange >= 0;
   const isMarketRunning = data.is_market_open ?? false;
 
-  // Chart data
-  const chartData = [
-    {
-      date: dateUtils.format(data.last_price_date, "short"),
-      price: data.last_price,
-      type: "Historical",
-    },
-    ...validForecasts.map((f) => ({
-      date: dateUtils.format(f.date, "short"),
-      price: f.forecasted_price,
-      type: "Forecast",
-    })),
-  ];
-  
+  // Build combined chart data: actual prices from Jan + forecast prices
+  const lastPriceDateISO = data.last_price_date.split("T")[0];
+
+  // Use comparison/analytics data for actual prices (historical API only goes to Dec 2025)
+  const actualPricesForChart = (analyticsData?.comparison ?? [])
+    .filter((item) => {
+      const d = item.date.split("T")[0];
+      return d <= lastPriceDateISO && item.actual_price != null && isValidOilPrice(item.actual_price);
+    })
+    .map((item) => ({
+      date: dateUtils.format(item.date, "short"),
+      rawDate: item.date.split("T")[0],
+      actualPrice: item.actual_price as number | null,
+      forecastPrice: null as number | null,
+    }));
+
+  // If we have no historical data loaded yet, fall back to just the last price
+  const hasActualPrices = actualPricesForChart.length > 0;
+  const bridgeDate = dateUtils.format(data.last_price_date, "short");
+
+  // Build the forecast portion
+  const forecastPricesForChart = validForecasts.map((f) => ({
+    date: dateUtils.format(f.date, "short"),
+    rawDate: f.date.split("T")[0],
+    actualPrice: null as number | null,
+    forecastPrice: f.forecasted_price as number | null,
+  }));
+
+  let chartData: Array<{
+    date: string;
+    rawDate: string;
+    actualPrice: number | null;
+    forecastPrice: number | null;
+  }>;
+
+  if (hasActualPrices) {
+    // Ensure the last actual point also carries the forecastPrice so the lines connect
+    const lastActual = actualPricesForChart[actualPricesForChart.length - 1];
+    lastActual.forecastPrice = lastActual.actualPrice;
+    chartData = [...actualPricesForChart, ...forecastPricesForChart];
+  } else {
+    // Fallback: just show a single actual point connected to forecasts
+    chartData = [
+      {
+        date: bridgeDate,
+        rawDate: lastPriceDateISO.split("T")[0],
+        actualPrice: data.last_price,
+        forecastPrice: data.last_price,
+      },
+      ...forecastPricesForChart,
+    ];
+  }
+
   const tableData = validForecasts.map((forecast, index) => ({
     ...forecast,
     key: index,
@@ -646,8 +707,10 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     },
   ];
 
-  // Price range for chart
-  const allPrices = chartData.map((d) => d.price);
+  // Price range for chart — collect all non-null prices
+  const allPrices = chartData.flatMap((d) =>
+    [d.actualPrice, d.forecastPrice].filter((v): v is number => v !== null),
+  );
   const minPrice = Math.min(...allPrices);
   const maxPrice = Math.max(...allPrices);
   const priceRange = maxPrice - minPrice;
@@ -955,10 +1018,14 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
           >
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-gold to-oil-amber" />
+                <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-gold" />
                 Price Trajectory
               </h3>
-              <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-5 text-xs">
+                <span className="flex items-center gap-1.5 text-gray-400">
+                  <div className="w-2.5 h-2.5 rounded-full bg-oil-cyan" />
+                  Actual
+                </span>
                 <span className="flex items-center gap-1.5 text-gray-400">
                   <div className="w-2.5 h-2.5 rounded-full bg-oil-gold" />
                   Forecast
@@ -969,7 +1036,11 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>
-                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#06B6D4" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#06B6D4" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.25} />
                       <stop offset="100%" stopColor="#F59E0B" stopOpacity={0} />
                     </linearGradient>
@@ -998,13 +1069,33 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                     tickFormatter={(val) => formatCurrency(parseFiniteNumber(val), 2, "-")}
                   />
                   <Tooltip content={<CustomTooltip />} />
+                  {/* Actual prices area */}
                   <Area
                     type="monotone"
-                    dataKey="price"
+                    dataKey="actualPrice"
+                    stroke="#06B6D4"
+                    fillOpacity={1}
+                    fill="url(#colorActual)"
+                    strokeWidth={2}
+                    connectNulls={false}
+                    dot={false}
+                    activeDot={{
+                      r: 5,
+                      fill: "#06B6D4",
+                      strokeWidth: 2,
+                      stroke: "#0e0c0a",
+                    }}
+                  />
+                  {/* Forecast prices area */}
+                  <Area
+                    type="monotone"
+                    dataKey="forecastPrice"
                     stroke="#F59E0B"
                     fillOpacity={1}
-                    fill="url(#colorPrice)"
+                    fill="url(#colorForecast)"
                     strokeWidth={2.5}
+                    strokeDasharray="6 3"
+                    connectNulls={false}
                     dot={{
                       r: 4,
                       fill: "#F59E0B",
