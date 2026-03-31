@@ -642,6 +642,48 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     URL.revokeObjectURL(url);
   };
 
+  const downloadSentimentCSV = () => {
+    if (!sentimentData?.timeline.length) return;
+
+    const header =
+      "Date,Raw Daily Sentiment,Cross-Day Decayed Sentiment,Sentiment Change vs Prev Day,Decayed Sentiment Change vs Prev Day,News Volume,Log News Volume,Decayed News Volume,High News Regime";
+
+    const rows = sentimentData.timeline
+      .filter((row) => {
+        const rawDate = toDateOnly(row.date);
+        return (
+          rawDate >= SENTIMENT_DISPLAY_START_DATE &&
+          rawDate <= SENTIMENT_DISPLAY_END_DATE
+        );
+      })
+      .map((row) =>
+        [
+          toDateOnly(row.date),
+          row.raw_daily_sentiment,
+          row.cross_day_decayed_sentiment,
+          row.sentiment_change_vs_prev_day,
+          row.decayed_sentiment_change_vs_prev_day,
+          row.news_volume,
+          row.log_news_volume,
+          row.decayed_news_volume,
+          row.high_news_regime,
+        ].join(","),
+      );
+
+    if (!rows.length) return;
+
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const startDateFormatted = dateUtils.toISODate(SENTIMENT_DISPLAY_START_DATE);
+    const endDateFormatted = dateUtils.toISODate(SENTIMENT_DISPLAY_END_DATE);
+    a.download = `brent-crude-sentiment-decay-${startDateFormatted}-${endDateFormatted}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const formatPrice = (price: number): string => price.toFixed(2);
 
   if (loading && !data) return <SkeletonDashboard />;
@@ -1331,16 +1373,28 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
               <span className="text-xs text-gray-500 font-semibold uppercase tracking-widest">
                 Dataset Overview
               </span>
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={downloadHistoricalCSV}
-                disabled={!historicalData?.data.length}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl glass border border-oil-cyan/30 text-oil-cyan text-xs font-semibold hover:border-oil-cyan/60 hover:bg-oil-cyan/5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Download size={14} />
-                Download CSV
-              </motion.button>
+              <div className="flex items-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={downloadSentimentCSV}
+                  disabled={!sentimentData?.timeline.length || sentimentLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl glass border border-oil-gold/30 text-oil-gold text-xs font-semibold hover:border-oil-gold/60 hover:bg-oil-gold/5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Download size={14} />
+                  Sentiment CSV
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={downloadHistoricalCSV}
+                  disabled={!historicalData?.data.length}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl glass border border-oil-cyan/30 text-oil-cyan text-xs font-semibold hover:border-oil-cyan/60 hover:bg-oil-cyan/5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Download size={14} />
+                  Price CSV
+                </motion.button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
