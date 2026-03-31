@@ -17,6 +17,7 @@ import {
   fetchExplain as fetchExplainApi,
   fetchSentimentProgressively as fetchSentimentProgressivelyApi,
   getCachedPrediction,
+  getCachedPredictionComparison,
 } from "../api";
 import {
   AreaChart,
@@ -311,6 +312,8 @@ const getTodayDateInputValue = () => {
 
 const DEFAULT_ANALYTICS_END_DATE = getTodayDateInputValue();
 const toDateOnly = (value: string): string => value.split("T")[0];
+const SENTIMENT_DISPLAY_START_DATE = "2014-01-01";
+const SENTIMENT_DISPLAY_END_DATE = "2025-12-31";
 
 type DashboardTab = "forecast" | "historical" | "analytics";
 type DashboardNotificationScope =
@@ -327,6 +330,10 @@ const NOTIFICATION_SCOPE_TO_TAB: Record<DashboardNotificationScope, DashboardTab
 };
 
 const initialCachedPrediction = getCachedPrediction();
+const initialCachedPredictionComparison = getCachedPredictionComparison(
+  DEFAULT_ANALYTICS_START_DATE,
+  DEFAULT_ANALYTICS_END_DATE,
+);
 
 function Dashboard() { // NOSONAR: This container intentionally orchestrates multiple tabs/data sources in one screen.
   const [activeTab, setActiveTab] = useState<DashboardTab>("forecast");
@@ -335,14 +342,16 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     useState<HistoricalPricesResponse | null>(null);
   const [fanData, setFanData] = useState<FanResponse | null>(null);
   const [analyticsData, setAnalyticsData] =
-    useState<PredictionComparisonResponse | null>(null);
+    useState<PredictionComparisonResponse | null>(() => initialCachedPredictionComparison);
   const [sentimentData, setSentimentData] =
     useState<SentimentOverviewResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(!initialCachedPrediction);
   const [historicalLoading, setHistoricalLoading] = useState<boolean>(true);
   const [sentimentLoading, setSentimentLoading] = useState<boolean>(true);
   const [sentimentProgress, setSentimentProgress] = useState<number>(0);
-  const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(
+    !initialCachedPredictionComparison,
+  );
   const [historicalProgress, setHistoricalProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
@@ -408,27 +417,17 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     }
     fetchFan();
     fetchHistoricalPrices();
-    fetchPredictionComparison(
-      DEFAULT_ANALYTICS_START_DATE,
-      DEFAULT_ANALYTICS_END_DATE,
+    if (!initialCachedPredictionComparison) {
+      fetchPredictionComparison(
+        DEFAULT_ANALYTICS_START_DATE,
+        DEFAULT_ANALYTICS_END_DATE,
+      );
+    }
+    fetchSentimentOverview(
+      SENTIMENT_DISPLAY_START_DATE,
+      SENTIMENT_DISPLAY_END_DATE,
     );
   }, []);
-
-  useEffect(() => {
-    const rangeStart = historicalData?.date_range?.start;
-    const rangeEnd = historicalData?.date_range?.end;
-
-    if (!rangeStart || !rangeEnd) return;
-
-    const startDate = toDateOnly(rangeStart);
-    const endDate = toDateOnly(rangeEnd);
-    const nextRangeKey = `${startDate}|${endDate}`;
-
-    if (lastSentimentRangeRef.current === nextRangeKey) return;
-    lastSentimentRangeRef.current = nextRangeKey;
-
-    fetchSentimentOverview(startDate, endDate);
-  }, [historicalData?.date_range?.start, historicalData?.date_range?.end]);
 
   const fetchPredictions = async (requestOptions?: { forceRefresh?: boolean }) => {
     try {
@@ -494,7 +493,14 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     }
   };
 
-  const fetchSentimentOverview = async (startDate?: string, endDate?: string) => {
+  const fetchSentimentOverview = async (
+    startDate = SENTIMENT_DISPLAY_START_DATE,
+    endDate = SENTIMENT_DISPLAY_END_DATE,
+  ) => {
+    const nextRangeKey = `${startDate}|${endDate}`;
+    if (lastSentimentRangeRef.current === nextRangeKey && sentimentData) return;
+    lastSentimentRangeRef.current = nextRangeKey;
+
     try {
       setSentimentLoading(true);
       setSentimentError(null);
@@ -521,6 +527,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const fetchPredictionComparison = async (
     startDate = analyticsStartDate,
     endDate = analyticsEndDate,
+    requestOptions?: { forceRefresh?: boolean },
   ) => {
     if (!startDate || !endDate) {
       const msg = "Select both a start and end date to load analytics";
@@ -547,7 +554,11 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     try {
       setAnalyticsLoading(true);
       setAnalyticsError(null);
-      const result = await fetchPredictionComparisonApi(startDate, endDate);
+      const result = await fetchPredictionComparisonApi(
+        startDate,
+        endDate,
+        requestOptions,
+      );
       setAnalyticsData(result);
     } catch (err) {
       const msg =
@@ -585,13 +596,23 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const handleRefresh = async () => {
     setRefreshing(true);
     lastSentimentRangeRef.current = null;
-    await Promise.all([
-      fetchPredictions({ forceRefresh: true }),
-      fetchFan(),
-      fetchHistoricalPrices(),
-      fetchPredictionComparison(analyticsStartDate, analyticsEndDate),
-    ]);
-    setTimeout(() => setRefreshing(false), 500);
+
+    try {
+      await Promise.allSettled([
+        fetchPredictions({ forceRefresh: true }),
+        fetchFan(),
+        fetchHistoricalPrices(),
+        fetchSentimentOverview(
+          SENTIMENT_DISPLAY_START_DATE,
+          SENTIMENT_DISPLAY_END_DATE,
+        ),
+        fetchPredictionComparison(analyticsStartDate, analyticsEndDate, {
+          forceRefresh: true,
+        }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const downloadHistoricalCSV = () => {
@@ -808,16 +829,23 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     rawDate: item.date,
   }));
 
-  // Display all sentiment data without additional filtering
-  // (sentiment is already fetched for the historical date range)
-  const sentimentChartData = (sentimentData?.timeline ?? []).map((item) => ({
-    date: dateUtils.format(item.date, "short"),
-    rawDate: item.date,
-    rawSentiment: item.raw_daily_sentiment,
-    decayedSentiment: item.cross_day_decayed_sentiment,
-    newsVolume: item.news_volume,
-    highNewsRegime: item.high_news_regime,
-  }));
+  // Keep sentiment visualization pinned to the agreed historical window.
+  const sentimentChartData = (sentimentData?.timeline ?? [])
+    .filter((item) => {
+      const rawDate = toDateOnly(item.date);
+      return (
+        rawDate >= SENTIMENT_DISPLAY_START_DATE &&
+        rawDate <= SENTIMENT_DISPLAY_END_DATE
+      );
+    })
+    .map((item) => ({
+      date: dateUtils.format(item.date, "short"),
+      rawDate: item.date,
+      rawSentiment: item.raw_daily_sentiment,
+      decayedSentiment: item.cross_day_decayed_sentiment,
+      newsVolume: item.news_volume,
+      highNewsRegime: item.high_news_regime,
+    }));
 
   const historicalPriceValues = historicalChartData.map((d) => d.price);
   const historicalMinPrice = historicalPriceValues.length
@@ -1113,15 +1141,17 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
           </div>
 
           {/* Main Chart */}
-          {analyticsLoading ? (
-            <Skeleton className="h-112.5 rounded-3xl" />
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.5, duration: 0.5 }}
-              className="glass p-6 md:p-8 rounded-3xl"
-            >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+            className="glass p-6 md:p-8 rounded-3xl"
+          >
+            {analyticsLoading && (
+              <div className="mb-4 text-xs text-gray-500">
+                Syncing actual price series...
+              </div>
+            )}
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
                   <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-gold" />
@@ -1228,19 +1258,15 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            </motion.div>
-          )}
+          </motion.div>
 
           {/* Price Range Bar */}
-          {analyticsLoading ? (
-            <Skeleton className="h-16 rounded-2xl" />
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.55 }}
-              className="glass p-6 rounded-2xl"
-            >
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="glass p-6 rounded-2xl"
+          >
               <div className="flex items-center justify-between text-sm mb-3">
                 <span className="text-gray-500 font-medium">
                   Forecast Price Range
@@ -1267,7 +1293,6 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
               />
             </div>
             </motion.div>
-          )}
 
           {/* Data Table */}
           <motion.div
@@ -1332,19 +1357,23 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
 
               <div className="rounded-xl bg-white/3 border border-white/10 p-4">
                 <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-[0.2em] mb-2">
-                  <Activity size={13} className="text-emerald-400" />
-                  Records Loaded
+                  <Brain size={13} className="text-oil-gold" />
+                  Sentiment Signal
                 </div>
-                <p className="text-base font-semibold text-white leading-tight">
-                  {historicalRecordsLoaded.toLocaleString("en-US")} / {" "}
-                  {historicalRecordsAvailable.toLocaleString("en-US")}
-                </p>
-                <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-linear-to-r from-emerald-400 to-oil-cyan"
-                    style={{ width: `${Math.min(historicalCoverage, 100)}%` }}
-                  />
-                </div>
+                {sentimentLoading ? (
+                  <p className="text-base font-semibold text-white leading-tight">
+                    Loading sentiment...
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-base font-semibold text-white capitalize leading-tight">
+                      {sentimentSummary?.latest_trend ?? "neutral"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Avg decayed: {formatFixed(sentimentSummary?.average_decayed_sentiment, 3, "0.000")}
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="rounded-xl bg-white/3 border border-white/10 p-4">
@@ -1582,8 +1611,8 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                     </div>
                     <div className="text-xs text-gray-500">
                       Range: {dateUtils.formatRange(
-                        historicalData?.date_range?.start ?? sentimentData?.meta.start_date ?? "",
-                        historicalData?.date_range?.end ?? sentimentData?.meta.end_date ?? "",
+                        SENTIMENT_DISPLAY_START_DATE,
+                        SENTIMENT_DISPLAY_END_DATE,
                       )}
                     </div>
                   </div>

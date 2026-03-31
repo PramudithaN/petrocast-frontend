@@ -21,6 +21,8 @@ const EXPLAIN_API_URL = `${BASE_API_URL}/explain`;
 const SENTIMENT_OVERVIEW_API_URL =
   (import.meta.env.VITE_SENTIMENT_OVERVIEW_URL as string | undefined) ??
   "https://pramudithan-oil-price-prediction.hf.space/sentiment/overview";
+const DEFAULT_SENTIMENT_START_DATE = "2014-01-01";
+const DEFAULT_SENTIMENT_END_DATE = "2025-12-31";
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
 const EMPTY_DATE_RANGE = { start: "", end: "" };
 
@@ -352,8 +354,16 @@ interface PredictionCacheEntry {
   timestamp: number;
 }
 
+interface PredictionComparisonCacheEntry {
+  data: PredictionComparisonResponse;
+  timestamp: number;
+}
+
 let predictionCacheEntry: PredictionCacheEntry | null = null;
 let predictionInFlightRequest: Promise<PredictionResponse> | null = null;
+const predictionComparisonCache = new Map<string, PredictionComparisonCacheEntry>();
+const predictionComparisonInFlightRequests =
+  new Map<string, Promise<PredictionComparisonResponse>>();
 
 const getFreshPredictionCacheEntry = (): PredictionCacheEntry | null => {
   if (!predictionCacheEntry) return null;
@@ -370,6 +380,39 @@ export const getCachedPrediction = (): PredictionResponse | null =>
 export const clearPredictionCache = (): void => {
   predictionCacheEntry = null;
   predictionInFlightRequest = null;
+};
+
+const buildPredictionComparisonCacheKey = (
+  startDate: string,
+  endDate: string,
+): string => `${startDate}|${endDate}`;
+
+const getFreshPredictionComparisonCacheEntry = (
+  startDate: string,
+  endDate: string,
+): PredictionComparisonCacheEntry | null => {
+  const key = buildPredictionComparisonCacheKey(startDate, endDate);
+  const entry = predictionComparisonCache.get(key);
+
+  if (!entry) return null;
+
+  if (Date.now() - entry.timestamp > PREDICTION_CACHE_TTL_MS) {
+    predictionComparisonCache.delete(key);
+    return null;
+  }
+
+  return entry;
+};
+
+export const getCachedPredictionComparison = (
+  startDate: string,
+  endDate: string,
+): PredictionComparisonResponse | null =>
+  getFreshPredictionComparisonCacheEntry(startDate, endDate)?.data ?? null;
+
+export const clearPredictionComparisonCache = (): void => {
+  predictionComparisonCache.clear();
+  predictionComparisonInFlightRequests.clear();
 };
 
 export const fetchPredictions = async (
@@ -450,17 +493,39 @@ const normalizePredictionComparisonResponse = (
 export const fetchPredictionComparison = async (
   startDate: string,
   endDate: string,
+  requestOptions?: { forceRefresh?: boolean },
 ): Promise<PredictionComparisonResponse> => {
+  const useCache = !requestOptions?.forceRefresh;
+  const cacheKey = buildPredictionComparisonCacheKey(startDate, endDate);
+
+  if (useCache) {
+    const cached = getFreshPredictionComparisonCacheEntry(startDate, endDate);
+    if (cached) return cached.data;
+
+    const inFlightRequest = predictionComparisonInFlightRequests.get(cacheKey);
+    if (inFlightRequest) return inFlightRequest;
+  }
+
   const params = new URLSearchParams({
     start_date: startDate,
     end_date: endDate,
   });
 
-  const payload = await fetchJson<unknown>(
-    `${COMPARE_API_URL}?${params.toString()}`,
-  );
+  const request = fetchJson<unknown>(`${COMPARE_API_URL}?${params.toString()}`)
+    .then((payload) => normalizePredictionComparisonResponse(payload))
+    .then((result) => {
+      predictionComparisonCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+      return result;
+    })
+    .finally(() => {
+      predictionComparisonInFlightRequests.delete(cacheKey);
+    });
 
-  return normalizePredictionComparisonResponse(payload);
+  predictionComparisonInFlightRequests.set(cacheKey, request);
+  return request;
 };
 
 export interface FetchNewsOptions {
@@ -797,8 +862,8 @@ export const fetchSentimentOverview = async (
  * For large date ranges (e.g., 2014-2025), the backend returns all available sentiment data.
  */
 export const fetchSentimentProgressively = async (
-  startDate?: string,
-  endDate?: string,
+  startDate = DEFAULT_SENTIMENT_START_DATE,
+  endDate = DEFAULT_SENTIMENT_END_DATE,
   onProgress?: (partial: SentimentOverviewResponse, progress: number) => void,
 ): Promise<SentimentOverviewResponse> => {
   const options: FetchSentimentOverviewOptions = {
