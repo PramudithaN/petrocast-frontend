@@ -55,7 +55,7 @@ const PipelineStep = ({
       initial="hidden"
       animate={inView ? "visible" : "hidden"}
       variants={fadeUp(delay * 0.12)}
-      className="flex items-start gap-4 relative"
+      className="flex items-start gap-3 relative"
     >
       <div className="flex flex-col items-center shrink-0">
         <motion.div
@@ -100,7 +100,7 @@ const PipelineSection = () => {
     { label: "VMD Modes", value: "3 (trend / mid / high)" },
     { label: "Forecast Horizons", value: "H5, H7, H14" },
     { label: "Train / Val / Test", value: "70% / 15% / 15%" },
-    { label: "Stacking", value: "Ridge (alpha=1.0, 5-fold WF-CV)" },
+    { label: "Stacking", value: "Ridge · α=1.0 · 5-fold WF-CV" },
   ];
 
   const pipeline = [
@@ -165,24 +165,18 @@ const PipelineSection = () => {
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true }}
-        variants={stagger}
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-8"
+        variants={childFade}
+        className="glass rounded-xl border border-white/10 mb-8 flex flex-wrap divide-x divide-white/8"
       >
         {pipelineHighlights.map((item) => (
-          <motion.div
-            key={item.label}
-            variants={childFade}
-            className="glass rounded-xl p-4 border border-white/10"
-          >
-            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-500 mb-2">
-              {item.label}
-            </div>
-            <div className="text-sm font-semibold text-white">{item.value}</div>
-          </motion.div>
+          <div key={item.label} className="flex-1 min-w-[140px] px-5 py-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-gray-500 mb-1">{item.label}</div>
+            <div className="text-sm font-semibold text-white leading-tight">{item.value}</div>
+          </div>
         ))}
       </motion.div>
 
-      <div className="pl-2">
+      <div>
         {pipeline.map((item, index) => (
           <PipelineStep
             key={item.step}

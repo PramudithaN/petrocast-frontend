@@ -4,62 +4,64 @@ import { Code, Cpu, Database } from "lucide-react";
 
 const stagger = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.12 } },
+  visible: { transition: { staggerChildren: 0.1 } },
 };
 
 const childFade = {
-  hidden: { opacity: 0, y: 25 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5 },
-  },
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45 } },
 };
 
-const TechStackSection = () => {
-  const [techRef, techInView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1,
-  });
+const techStack = [
+  {
+    title: "Frontend",
+    icon: <Code className="w-4 h-4" />,
+    accent: "#3b82f6",
+    accentFaint: "rgba(59,130,246,0.08)",
+    hoverBorder: "hover:border-blue-500/30",
+    badges: [
+      { label: "React 18", sub: "TypeScript" },
+      { label: "Tailwind CSS", sub: "v4" },
+      { label: "Framer Motion", sub: "animation" },
+      { label: "Recharts", sub: "visualisation" },
+      { label: "Vite", sub: "build" },
+      { label: "Ant Design", sub: "components" },
+    ],
+  },
+  {
+    title: "Backend & ML",
+    icon: <Cpu className="w-4 h-4" />,
+    accent: "#a78bfa",
+    accentFaint: "rgba(167,139,250,0.08)",
+    hoverBorder: "hover:border-violet-400/30",
+    badges: [
+      { label: "Python", sub: "FastAPI" },
+      { label: "PyTorch", sub: "deep learning" },
+      { label: "FinBERT", sub: "NLP sentiment" },
+      { label: "Scikit-learn", sub: "Ridge stacking" },
+      { label: "XGBoost", sub: "HF model" },
+      { label: "VMD", sub: "decomposition" },
+    ],
+  },
+  {
+    title: "Data Sources",
+    icon: <Database className="w-4 h-4" />,
+    accent: "#10b981",
+    accentFaint: "rgba(16,185,129,0.08)",
+    hoverBorder: "hover:border-emerald-400/30",
+    badges: [
+      { label: "Yahoo Finance", sub: "price history" },
+      { label: "OilPrice.com", sub: "market data" },
+      { label: "Trading Economics", sub: "macro signals" },
+      { label: "BOE Reports", sub: "inflation data" },
+      { label: "FT.com", sub: "news articles" },
+      { label: "SQLite", sub: "storage · Pandas" },
+    ],
+  },
+];
 
-  const techStack = [
-    {
-      title: "Frontend",
-      icon: <Code className="w-5 h-5 text-blue-400" />,
-      color: "from-blue-500/10 to-blue-600/5",
-      items: [
-        "React 18 + TypeScript",
-        "Tailwind CSS v4",
-        "Framer Motion",
-        "Recharts",
-        "Vite",
-      ],
-    },
-    {
-      title: "Backend & ML",
-      icon: <Cpu className="w-5 h-5 text-purple-400" />,
-      color: "from-purple-500/10 to-purple-600/5",
-      items: [
-        "Python + FastAPI",
-        "PyTorch / TensorFlow",
-        "FinBERT NLP",
-        "Scikit-learn",
-        "VMD Decomposition",
-      ],
-    },
-    {
-      title: "Data Pipeline",
-      icon: <Database className="w-5 h-5 text-emerald-400" />,
-      color: "from-emerald-500/10 to-emerald-600/5",
-      items: [
-        "Yahoo Finance API",
-        "NewsAPI Integration",
-        "SQLite Database",
-        "Pandas + NumPy",
-        "Automated Scheduling",
-      ],
-    },
-  ];
+const TechStackSection = () => {
+  const [techRef, techInView] = useInView({ triggerOnce: true, threshold: 0.1 });
 
   return (
     <div ref={techRef} className="mb-16">
@@ -67,13 +69,13 @@ const TechStackSection = () => {
         initial="hidden"
         animate={techInView ? "visible" : "hidden"}
         variants={stagger}
-        className="mb-12"
+        className="mb-10"
       >
         <motion.h2
           variants={childFade}
           className="text-2xl md:text-3xl font-bold text-white font-display flex items-center gap-3"
         >
-          <div className="w-1 h-8 rounded-full bg-gradient-to-b from-oil-blue to-oil-cyan" />
+          <div className="w-1 h-8 rounded-full bg-linear-to-b from-oil-blue to-oil-cyan" />
           Technical Stack
         </motion.h2>
       </motion.div>
@@ -82,38 +84,49 @@ const TechStackSection = () => {
         initial="hidden"
         animate={techInView ? "visible" : "hidden"}
         variants={stagger}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        className="grid grid-cols-1 md:grid-cols-3 gap-5"
       >
         {techStack.map((stack) => (
           <motion.div
             key={stack.title}
             variants={childFade}
-            whileHover={{ y: -6 }}
-            className="group glass p-8 rounded-3xl hover:border-oil-gold/20 transition-all duration-500 relative overflow-hidden"
+            whileHover={{ y: -4 }}
+            className={`group glass rounded-2xl border border-white/10 ${stack.hoverBorder} transition-all duration-400 overflow-hidden`}
           >
-            <div
-              className={`absolute inset-0 bg-gradient-to-br ${stack.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl`}
-            />
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-6 pb-5 border-b border-white/5">
-                <div className="p-2.5 bg-white/5 rounded-xl">
+            {/* coloured top accent bar */}
+            <div className="h-[3px] w-full" style={{ background: stack.accent }} />
+
+            <div className="p-6">
+              {/* header */}
+              <div className="flex items-center gap-2.5 mb-5">
+                <div
+                  className="p-2 rounded-lg"
+                  style={{ background: stack.accentFaint, color: stack.accent }}
+                >
                   {stack.icon}
                 </div>
-                <h3 className="text-base font-bold text-gray-100 font-display">
+                <h3 className="text-sm font-bold text-white font-display tracking-wide">
                   {stack.title}
                 </h3>
               </div>
-              <ul className="space-y-3">
-                {stack.items.map((item) => (
-                  <li
-                    key={item}
-                    className="flex items-center gap-3 text-gray-400 text-sm font-medium"
+
+              {/* badge grid */}
+              <div className="flex flex-wrap gap-2">
+                {stack.badges.map((b) => (
+                  <motion.div
+                    key={b.label}
+                    whileHover={{ scale: 1.04 }}
+                    className="flex flex-col px-3 py-1.5 rounded-lg border border-white/8 bg-white/3 cursor-default"
                   >
-                    <div className="w-1.5 h-1.5 rounded-full bg-oil-gold/60" />
-                    {item}
-                  </li>
+                    <span className="text-[12px] font-semibold text-gray-100 leading-tight">
+                      {b.label}
+                    </span>
+                    <span className="text-[10px] text-gray-500 leading-tight mt-0.5">
+                      {b.sub}
+                    </span>
+                  </motion.div>
                 ))}
-              </ul>
+              </div>
             </div>
           </motion.div>
         ))}
