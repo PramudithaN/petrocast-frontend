@@ -6,6 +6,7 @@ import {
   NewsResponse,
   PredictionComparisonResponse,
   PredictionResponse,
+  SentimentOverviewResponse,
 } from "../types/api";
 
 const BASE_API_URL = import.meta.env.VITE_API_BASE_URL as string;
@@ -17,6 +18,9 @@ const NEWS_API_URL = `${BASE_API_URL}/news`;
 const UPLOAD_EXCEL_API_URL = `${BASE_API_URL}/predict/upload-excel`;
 const UPLOAD_EXCEL_TEMPLATE_URL = `${BASE_API_URL}/predict/upload-excel/template`;
 const EXPLAIN_API_URL = `${BASE_API_URL}/explain`;
+const SENTIMENT_OVERVIEW_API_URL =
+  (import.meta.env.VITE_SENTIMENT_OVERVIEW_URL as string | undefined) ??
+  "https://pramudithan-oil-price-prediction.hf.space/sentiment/overview";
 const DEFAULT_HISTORICAL_PAGE_LIMIT = 500;
 const EMPTY_DATE_RANGE = { start: "", end: "" };
 
@@ -201,6 +205,127 @@ const normalizeHistoricalResponse = (
     offset: toIntegerOrZero(response.offset),
     date_range: normalizedDateRange,
     data,
+  };
+};
+
+const normalizeSentimentOverviewResponse = (
+  payload: unknown,
+): SentimentOverviewResponse => {
+  const { root, response } = unwrapRecordPayload(payload);
+  const rawMeta = isRecord(response.meta) ? response.meta : {};
+  const rawSummary = isRecord(response.summary) ? response.summary : {};
+  const rawTimeline = Array.isArray(response.timeline) ? response.timeline : [];
+
+  const timeline: SentimentOverviewResponse["timeline"] = rawTimeline
+    .map((item): SentimentOverviewResponse["timeline"][number] | null => {
+      const row = isRecord(item) ? item : {};
+      const rawEma = isRecord(row.ema) ? row.ema : {};
+      const rawHeadlines = Array.isArray(row.headlines) ? row.headlines : [];
+      const date = toStringOrDefault(row.date);
+
+      if (!date) return null;
+
+      return {
+        date,
+        raw_daily_sentiment: toFiniteNumberOrDefault(row.raw_daily_sentiment),
+        cross_day_decayed_sentiment: toFiniteNumberOrDefault(
+          row.cross_day_decayed_sentiment,
+        ),
+        sentiment_change_vs_prev_day: toFiniteNumberOrDefault(
+          row.sentiment_change_vs_prev_day,
+        ),
+        decayed_sentiment_change_vs_prev_day: toFiniteNumberOrDefault(
+          row.decayed_sentiment_change_vs_prev_day,
+        ),
+        news_volume: toFiniteNumberOrDefault(row.news_volume),
+        log_news_volume: toFiniteNumberOrDefault(row.log_news_volume),
+        decayed_news_volume: toFiniteNumberOrDefault(row.decayed_news_volume),
+        high_news_regime:
+          typeof row.high_news_regime === "boolean" ? row.high_news_regime : false,
+        ema: {
+          daily_sentiment_decay_ema_3: toFiniteNumberOrNull(
+            rawEma.daily_sentiment_decay_ema_3,
+          ) ?? undefined,
+          daily_sentiment_decay_ema_7: toFiniteNumberOrNull(
+            rawEma.daily_sentiment_decay_ema_7,
+          ) ?? undefined,
+          daily_sentiment_decay_ema_14: toFiniteNumberOrNull(
+            rawEma.daily_sentiment_decay_ema_14,
+          ) ?? undefined,
+          news_volume_ema_3: toFiniteNumberOrNull(rawEma.news_volume_ema_3) ?? undefined,
+          news_volume_ema_7: toFiniteNumberOrNull(rawEma.news_volume_ema_7) ?? undefined,
+          news_volume_ema_14:
+            toFiniteNumberOrNull(rawEma.news_volume_ema_14) ?? undefined,
+          log_news_volume_ema_3:
+            toFiniteNumberOrNull(rawEma.log_news_volume_ema_3) ?? undefined,
+          log_news_volume_ema_7:
+            toFiniteNumberOrNull(rawEma.log_news_volume_ema_7) ?? undefined,
+          log_news_volume_ema_14:
+            toFiniteNumberOrNull(rawEma.log_news_volume_ema_14) ?? undefined,
+          decayed_news_volume_ema_3:
+            toFiniteNumberOrNull(rawEma.decayed_news_volume_ema_3) ?? undefined,
+          decayed_news_volume_ema_7:
+            toFiniteNumberOrNull(rawEma.decayed_news_volume_ema_7) ?? undefined,
+          decayed_news_volume_ema_14:
+            toFiniteNumberOrNull(rawEma.decayed_news_volume_ema_14) ?? undefined,
+        },
+        headlines: rawHeadlines
+          .map((headline) => {
+            const rowHeadline = isRecord(headline) ? headline : {};
+            const title = toStringOrDefault(rowHeadline.title);
+            const source = toStringOrDefault(rowHeadline.source);
+            const publishedAt = toStringOrDefault(rowHeadline.published_at);
+            const url = toStringOrDefault(rowHeadline.url);
+            if (!title || !source || !publishedAt || !url) return null;
+
+            return {
+              title,
+              source,
+              sentiment_score: toFiniteNumberOrDefault(rowHeadline.sentiment_score),
+              published_at: publishedAt,
+              url,
+            };
+          })
+          .filter(
+            (headline): headline is NonNullable<typeof headline> => headline !== null,
+          ),
+      };
+    })
+    .filter((row): row is SentimentOverviewResponse["timeline"][number] => row !== null);
+
+  return {
+    success: resolveSuccessFlag(root, response),
+    meta: {
+      requested_days: toIntegerOrZero(rawMeta.requested_days),
+      actual_records: toIntegerOrZero(rawMeta.actual_records) || timeline.length,
+      start_date: toStringOrDefault(rawMeta.start_date),
+      end_date: toStringOrDefault(rawMeta.end_date),
+      decay_lambda: toFiniteNumberOrDefault(rawMeta.decay_lambda),
+      decay_factor: toFiniteNumberOrDefault(rawMeta.decay_factor),
+      decay_formula: toStringOrDefault(rawMeta.decay_formula),
+      ema_windows: Array.isArray(rawMeta.ema_windows)
+        ? rawMeta.ema_windows
+            .map((window) => toIntegerOrZero(window))
+            .filter((window) => window > 0)
+        : [],
+    },
+    summary: {
+      latest_raw_sentiment: toFiniteNumberOrDefault(rawSummary.latest_raw_sentiment),
+      latest_decayed_sentiment: toFiniteNumberOrDefault(
+        rawSummary.latest_decayed_sentiment,
+      ),
+      average_raw_sentiment: toFiniteNumberOrDefault(rawSummary.average_raw_sentiment),
+      average_decayed_sentiment: toFiniteNumberOrDefault(
+        rawSummary.average_decayed_sentiment,
+      ),
+      average_news_volume: toFiniteNumberOrDefault(rawSummary.average_news_volume),
+      high_news_regime_days: toIntegerOrZero(rawSummary.high_news_regime_days),
+      positive_days: toIntegerOrZero(rawSummary.positive_days),
+      negative_days: toIntegerOrZero(rawSummary.negative_days),
+      neutral_days: toIntegerOrZero(rawSummary.neutral_days),
+      latest_trend: toStringOrDefault(rawSummary.latest_trend, "neutral"),
+    },
+    timeline,
   };
 };
 
@@ -609,6 +734,48 @@ export const fetchHistoricalPricesProgressive = async (
   const finalResult = buildHistoricalResult(allRows, firstPage);
   onProgress(finalResult, 100);
   return finalResult;
+};
+
+export interface FetchSentimentOverviewOptions {
+  days?: number;
+  startDate?: string;
+  endDate?: string;
+  includeHeadlines?: boolean;
+  headlinesPerDay?: number;
+}
+
+export const fetchSentimentOverview = async (
+  options?: FetchSentimentOverviewOptions,
+): Promise<SentimentOverviewResponse> => {
+  const params = new URLSearchParams();
+
+  if (typeof options?.days === "number") {
+    params.set("days", String(options.days));
+  }
+
+  if (typeof options?.startDate === "string" && options.startDate.trim()) {
+    params.set("start_date", options.startDate.trim());
+  }
+
+  if (typeof options?.endDate === "string" && options.endDate.trim()) {
+    params.set("end_date", options.endDate.trim());
+  }
+
+  if (typeof options?.includeHeadlines === "boolean") {
+    params.set("include_headlines", String(options.includeHeadlines));
+  }
+
+  if (typeof options?.headlinesPerDay === "number") {
+    params.set("headlines_per_day", String(options.headlinesPerDay));
+  }
+
+  const query = params.toString();
+  const url = query
+    ? `${SENTIMENT_OVERVIEW_API_URL}?${query}`
+    : SENTIMENT_OVERVIEW_API_URL;
+
+  const payload = await fetchJson<unknown>(url);
+  return normalizeSentimentOverviewResponse(payload);
 };
 
 /**

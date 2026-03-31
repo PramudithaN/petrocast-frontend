@@ -7,6 +7,7 @@ import {
   PredictionComparisonResponse,
   PredictionResponse,
   ExplainResponse,
+  SentimentOverviewResponse,
 } from "../types/api";
 import {
   fetchFanPredictions as fetchFanPredictionsApi,
@@ -14,6 +15,7 @@ import {
   fetchPredictionComparison as fetchPredictionComparisonApi,
   fetchPredictions as fetchPredictionsApi,
   fetchExplain as fetchExplainApi,
+  fetchSentimentOverview as fetchSentimentOverviewApi,
   getCachedPrediction,
 } from "../api";
 import {
@@ -265,6 +267,38 @@ const HistoricalChangeTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+const HistoricalSentimentTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+
+  return (
+    <div className="glass-strong p-4 rounded-xl shadow-2xl min-w-52">
+      <p className="text-xs text-gray-400 mb-2">{label}</p>
+      <div className="space-y-1.5 text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-gray-500">Raw Sentiment</span>
+          <span className="font-mono text-oil-cyan">
+            {Number(point.rawSentiment ?? 0).toFixed(3)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-gray-500">Decayed Sentiment</span>
+          <span className="font-mono text-oil-gold">
+            {Number(point.decayedSentiment ?? 0).toFixed(3)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-gray-500">News Volume</span>
+          <span className="font-mono text-gray-300">
+            {Number(point.newsVolume ?? 0).toFixed(0)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DEFAULT_ANALYTICS_START_DATE = "2026-01-01";
 const getTodayDateInputValue = () => {
   const today = new Date();
@@ -276,6 +310,21 @@ const getTodayDateInputValue = () => {
 };
 
 const DEFAULT_ANALYTICS_END_DATE = getTodayDateInputValue();
+const FALLBACK_SENTIMENT_RANGE_DAYS = 4500;
+
+const toDateOnly = (value: string): string => value.split("T")[0];
+
+const getInclusiveDateSpanDays = (startDate: string, endDate: string): number => {
+  const startMs = Date.parse(startDate);
+  const endMs = Date.parse(endDate);
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+    return FALLBACK_SENTIMENT_RANGE_DAYS;
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.max(1, Math.floor((endMs - startMs) / msPerDay) + 1);
+};
 
 type DashboardTab = "forecast" | "historical" | "analytics";
 type DashboardNotificationScope =
@@ -301,12 +350,16 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const [fanData, setFanData] = useState<FanResponse | null>(null);
   const [analyticsData, setAnalyticsData] =
     useState<PredictionComparisonResponse | null>(null);
+  const [sentimentData, setSentimentData] =
+    useState<SentimentOverviewResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(!initialCachedPrediction);
   const [historicalLoading, setHistoricalLoading] = useState<boolean>(true);
+  const [sentimentLoading, setSentimentLoading] = useState<boolean>(true);
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(true);
   const [historicalProgress, setHistoricalProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
+  const [sentimentError, setSentimentError] = useState<string | null>(null);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [analyticsStartDate, setAnalyticsStartDate] =
     useState<string>(DEFAULT_ANALYTICS_START_DATE);
@@ -321,6 +374,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const dateUtils = useDateUtils();
   // Guards against React StrictMode double-invocation firing the initial fetches twice.
   const initialFetchDone = useRef(false);
+  const lastSentimentRangeRef = useRef<string | null>(null);
   const pendingNotifications = useRef<
     Partial<Record<DashboardNotificationScope, Parameters<typeof notify>[0]>>
   >({});
@@ -372,6 +426,22 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
       DEFAULT_ANALYTICS_END_DATE,
     );
   }, []);
+
+  useEffect(() => {
+    const rangeStart = historicalData?.date_range?.start;
+    const rangeEnd = historicalData?.date_range?.end;
+
+    if (!rangeStart || !rangeEnd) return;
+
+    const startDate = toDateOnly(rangeStart);
+    const endDate = toDateOnly(rangeEnd);
+    const nextRangeKey = `${startDate}|${endDate}`;
+
+    if (lastSentimentRangeRef.current === nextRangeKey) return;
+    lastSentimentRangeRef.current = nextRangeKey;
+
+    fetchSentimentOverview(startDate, endDate);
+  }, [historicalData?.date_range?.start, historicalData?.date_range?.end]);
 
   const fetchPredictions = async (requestOptions?: { forceRefresh?: boolean }) => {
     try {
@@ -434,6 +504,34 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
         message: msg,
       });
       setHistoricalLoading(false);
+    }
+  };
+
+  const fetchSentimentOverview = async (startDate?: string, endDate?: string) => {
+    try {
+      setSentimentLoading(true);
+      setSentimentError(null);
+      const fallbackDays =
+        startDate && endDate
+          ? getInclusiveDateSpanDays(startDate, endDate)
+          : FALLBACK_SENTIMENT_RANGE_DAYS;
+      const result = await fetchSentimentOverviewApi({
+        days: fallbackDays,
+        startDate,
+        endDate,
+        includeHeadlines: false,
+      });
+      setSentimentData(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch sentiment overview";
+      setSentimentError(msg);
+      notifyForTab("historical", {
+        type: "warning",
+        title: "Sentiment data unavailable",
+        message: msg,
+      });
+    } finally {
+      setSentimentLoading(false);
     }
   };
 
@@ -503,6 +601,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    lastSentimentRangeRef.current = null;
     await Promise.all([
       fetchPredictions({ forceRefresh: true }),
       fetchFan(),
@@ -725,6 +824,27 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     changePct: item.change_pct,
     rawDate: item.date,
   }));
+  const historicalRangeStart = historicalData?.date_range?.start
+    ? toDateOnly(historicalData.date_range.start)
+    : null;
+  const historicalRangeEnd = historicalData?.date_range?.end
+    ? toDateOnly(historicalData.date_range.end)
+    : null;
+
+  const sentimentChartData = (sentimentData?.timeline ?? [])
+    .filter((item) => {
+      const itemDate = toDateOnly(item.date);
+      if (!historicalRangeStart || !historicalRangeEnd) return true;
+      return itemDate >= historicalRangeStart && itemDate <= historicalRangeEnd;
+    })
+    .map((item) => ({
+      date: dateUtils.format(item.date, "short"),
+      rawDate: item.date,
+      rawSentiment: item.raw_daily_sentiment,
+      decayedSentiment: item.cross_day_decayed_sentiment,
+      newsVolume: item.news_volume,
+      highNewsRegime: item.high_news_regime,
+    }));
 
   const historicalPriceValues = historicalChartData.map((d) => d.price);
   const historicalMinPrice = historicalPriceValues.length
@@ -734,6 +854,16 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     ? Math.max(...historicalPriceValues)
     : 0;
   const historicalPriceRange = historicalMaxPrice - historicalMinPrice;
+  const sentimentValues = sentimentChartData.flatMap((item) => [
+    item.rawSentiment,
+    item.decayedSentiment,
+  ]);
+  const sentimentMinValue = sentimentValues.length ? Math.min(...sentimentValues) : 0;
+  const sentimentMaxValue = sentimentValues.length ? Math.max(...sentimentValues) : 0;
+  const sentimentRange = sentimentMaxValue - sentimentMinValue;
+  const sentimentSafeRange =
+    sentimentRange > 0 ? sentimentRange : Math.max(Math.abs(sentimentMaxValue) * 0.3, 1);
+  const sentimentSummary = sentimentData?.summary;
   const historicalRecordsLoaded = historicalData?.total_records ?? 0;
   const historicalRecordsAvailable = historicalData?.total_available ?? 0;
   const historicalCoverage = historicalRecordsAvailable
@@ -1409,6 +1539,139 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                   </ResponsiveContainer>
                 </div>
               </motion.div>
+
+              {sentimentLoading && (
+                <Skeleton className="h-95 rounded-3xl" />
+              )}
+
+              {!sentimentLoading && sentimentError && (
+                <div className="glass p-8 rounded-3xl text-center">
+                  <h3 className="text-base font-bold text-white mb-2">Sentiment Overview Unavailable</h3>
+                  <p className="text-sm text-gray-400 mb-5">{sentimentError}</p>
+                  <AnimatedButton
+                    variant="secondary"
+                    onClick={fetchSentimentOverview}
+                    className="px-5 py-2.5 rounded-xl text-sm"
+                  >
+                    Retry Sentiment Fetch
+                  </AnimatedButton>
+                </div>
+              )}
+
+              {!sentimentLoading && !sentimentError && sentimentChartData.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass p-6 md:p-8 rounded-3xl"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
+                        <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-gold to-oil-cyan" />
+                        Sentiment Decay Trend
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Raw daily sentiment compared with cross-day exponential decay
+                      </p>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Range: {dateUtils.formatRange(
+                        historicalData?.date_range?.start ?? sentimentData?.meta.start_date ?? "",
+                        historicalData?.date_range?.end ?? sentimentData?.meta.end_date ?? "",
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                    <div className="rounded-xl bg-white/3 border border-white/10 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-1">
+                        Latest Raw
+                      </div>
+                      <div className="text-xl font-bold text-oil-cyan font-display">
+                        {formatFixed(sentimentSummary?.latest_raw_sentiment, 3, "0.000")}
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-white/3 border border-white/10 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-1">
+                        Latest Decayed
+                      </div>
+                      <div className="text-xl font-bold text-oil-gold font-display">
+                        {formatFixed(sentimentSummary?.latest_decayed_sentiment, 3, "0.000")}
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-white/3 border border-white/10 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-1">
+                        Trend / News
+                      </div>
+                      <div className="text-xl font-bold text-white font-display capitalize">
+                        {sentimentSummary?.latest_trend ?? "neutral"}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Avg volume: {formatFixed(sentimentSummary?.average_news_volume, 1, "0.0")}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-95 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={sentimentChartData}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.04)"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#4b5563"
+                          tick={{ fill: "#6b7280", fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          minTickGap={24}
+                        />
+                        <YAxis
+                          stroke="#4b5563"
+                          tick={{ fill: "#6b7280", fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          domain={[
+                            sentimentMinValue - sentimentSafeRange * 0.2,
+                            sentimentMaxValue + sentimentSafeRange * 0.2,
+                          ]}
+                          tickFormatter={(val) => Number(val).toFixed(2)}
+                        />
+                        <Tooltip content={<HistoricalSentimentTooltip />} />
+                        <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" strokeDasharray="4 4" />
+                        <Line
+                          type="monotone"
+                          dataKey="rawSentiment"
+                          stroke="#22D3EE"
+                          strokeWidth={2.2}
+                          dot={false}
+                          activeDot={{
+                            r: 5,
+                            fill: "#22D3EE",
+                            stroke: "#0f172a",
+                            strokeWidth: 2,
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="decayedSentiment"
+                          stroke="#F59E0B"
+                          strokeWidth={2.4}
+                          dot={false}
+                          activeDot={{
+                            r: 5,
+                            fill: "#F59E0B",
+                            stroke: "#0f172a",
+                            strokeWidth: 2,
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
+              )}
             </>
           )}
         </>

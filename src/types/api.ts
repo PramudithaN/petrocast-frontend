@@ -109,6 +109,74 @@ export interface NewsResponse {
   dates: string[];
 }
 
+export interface SentimentHeadline {
+  title: string;
+  source: string;
+  sentiment_score: number;
+  published_at: string;
+  url: string;
+}
+
+export interface SentimentEmaSeries {
+  daily_sentiment_decay_ema_3?: number;
+  daily_sentiment_decay_ema_7?: number;
+  daily_sentiment_decay_ema_14?: number;
+  news_volume_ema_3?: number;
+  news_volume_ema_7?: number;
+  news_volume_ema_14?: number;
+  log_news_volume_ema_3?: number;
+  log_news_volume_ema_7?: number;
+  log_news_volume_ema_14?: number;
+  decayed_news_volume_ema_3?: number;
+  decayed_news_volume_ema_7?: number;
+  decayed_news_volume_ema_14?: number;
+}
+
+export interface SentimentTimelinePoint {
+  date: string;
+  raw_daily_sentiment: number;
+  cross_day_decayed_sentiment: number;
+  sentiment_change_vs_prev_day: number;
+  decayed_sentiment_change_vs_prev_day: number;
+  news_volume: number;
+  log_news_volume: number;
+  decayed_news_volume: number;
+  high_news_regime: boolean;
+  ema: SentimentEmaSeries;
+  headlines: SentimentHeadline[];
+}
+
+export interface SentimentOverviewMeta {
+  requested_days: number;
+  actual_records: number;
+  start_date: string;
+  end_date: string;
+  decay_lambda: number;
+  decay_factor: number;
+  decay_formula: string;
+  ema_windows: number[];
+}
+
+export interface SentimentOverviewSummary {
+  latest_raw_sentiment: number;
+  latest_decayed_sentiment: number;
+  average_raw_sentiment: number;
+  average_decayed_sentiment: number;
+  average_news_volume: number;
+  high_news_regime_days: number;
+  positive_days: number;
+  negative_days: number;
+  neutral_days: number;
+  latest_trend: string;
+}
+
+export interface SentimentOverviewResponse {
+  success: boolean;
+  meta: SentimentOverviewMeta;
+  summary: SentimentOverviewSummary;
+  timeline: SentimentTimelinePoint[];
+}
+
 /* ─── Explainability ─── */
 
 export interface ExplainTopFeature {
