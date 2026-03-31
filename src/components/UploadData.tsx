@@ -42,6 +42,11 @@ const formatCurrency = (
   fallback = "0.00",
 ): string => `$${formatFixed(value, digits, fallback)}`;
 
+const roundPrice = (value: number, digits = 2): number => {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+};
+
 function validateFileType(file: File): string | null {
   if (
     !file.name.endsWith(".xlsx") &&
@@ -210,7 +215,7 @@ function UploaderSection({
       onDragOver={handleDrag}
       onDrop={handleDrop}
       onClick={handleUploadClick}
-      className={`relative overflow-hidden min-h-[calc(100vh-220px)] rounded-[2rem] border-2 border-dashed backdrop-blur-xl transition-all duration-300 cursor-pointer bg-oil-black/25 ${
+      className={`relative overflow-hidden min-h-[calc(100vh-220px)] rounded-4xl border-2 border-dashed backdrop-blur-xl transition-all duration-300 cursor-pointer bg-oil-black/25 ${
         dragActive
           ? "border-oil-gold/55 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]"
           : "border-white/20 hover:border-white/30"
@@ -300,16 +305,36 @@ function UploaderSection({
 function PredictionsResults({ predictions }: { readonly predictions: PredictionResponse }) {
   const dateUtils = useDateUtils();
 
-  const chartData = predictions.forecasts.map((item) => ({
-    date: dateUtils.format(item.date, "short"),
-    price: item.forecasted_price,
-    horizon: item.horizon,
-    rawDate: item.date,
-  }));
+  const chartData = predictions.forecasts
+    .map((item) => ({
+      date: dateUtils.format(item.date, "short"),
+      price: roundPrice(Number(item.forecasted_price)),
+      horizon: item.horizon,
+      rawDate: item.date,
+    }))
+    .filter((item) => isFiniteNumber(item.price));
 
   const priceValues = chartData.map((d) => d.price);
   const minPrice = priceValues.length ? Math.min(...priceValues) : 0;
   const maxPrice = priceValues.length ? Math.max(...priceValues) : 0;
+  const priceRange = maxPrice - minPrice;
+  const safePricePadding =
+    priceValues.length === 0
+      ? 1
+      : priceRange > 0
+        ? priceRange * 0.18
+        : Math.max(Math.abs(maxPrice) * 0.03, 1);
+  const chartMinPrice = roundPrice(minPrice - safePricePadding);
+  const chartMaxPrice = roundPrice(maxPrice + safePricePadding);
+  const chartTicks =
+    priceValues.length === 0
+      ? [0]
+      : Array.from({ length: 5 }, (_, index) => {
+          const ratio = index / 4;
+          return roundPrice(
+            chartMinPrice + (chartMaxPrice - chartMinPrice) * ratio,
+          );
+        });
   const avgPrice = priceValues.length
     ? priceValues.reduce((a, b) => a + b, 0) / priceValues.length
     : 0;
@@ -457,7 +482,11 @@ function PredictionsResults({ predictions }: { readonly predictions: PredictionR
                   <YAxis
                     stroke="rgba(255,255,255,0.2)"
                     style={{ fontSize: "12px" }}
-                    domain={[minPrice * 0.95, maxPrice * 1.05]}
+                    domain={[chartMinPrice, chartMaxPrice]}
+                    ticks={chartTicks}
+                    interval={0}
+                    tickFormatter={(value: number) => formatCurrency(value, 2, "-")}
+                    width={92}
                   />
                   <Tooltip
                     contentStyle={{
@@ -466,7 +495,7 @@ function PredictionsResults({ predictions }: { readonly predictions: PredictionR
                       borderRadius: "8px",
                       color: "#fff",
                     }}
-                    formatter={(value) => formatCurrency(value as number | null)}
+                    formatter={(value) => formatCurrency(Number(value), 2, "-")}
                   />
                   <Area
                     type="monotone"
@@ -546,7 +575,7 @@ function PredictionsResults({ predictions }: { readonly predictions: PredictionR
               transition={{ delay: 0.7 }}
               className="glass p-6 rounded-2xl flex items-start gap-4"
             >
-              <div className={`p-3 rounded-xl flex-shrink-0 ${
+              <div className={`p-3 rounded-xl shrink-0 ${
                 isPositive ? "bg-emerald-500/10" : "bg-red-500/10"
               }`}>
                 {isPositive ? (
@@ -604,7 +633,7 @@ function UploadData() {
   } = useFileUpload();
 
   return (
-    <div className="relative px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-[1700px] mx-auto min-h-screen bg-oil-black">
+    <div className="relative px-4 sm:px-6 md:px-8 lg:px-10 pt-24 pb-8 space-y-8 max-w-425 mx-auto min-h-screen bg-oil-black">
       <div className="pointer-events-none absolute top-28 right-10 h-44 w-44 rounded-full bg-oil-gold/10 blur-3xl" />
 
       {/* Header */}
