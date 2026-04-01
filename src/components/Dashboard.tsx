@@ -427,21 +427,31 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
+
+    const primaryRequests: Promise<unknown>[] = [];
+
+    // Prioritize forecast + actual comparison so both series can render together.
     if (!initialCachedPrediction) {
-      fetchPredictions();
+      primaryRequests.push(fetchPredictions());
     }
-    fetchFan();
-    fetchHistoricalPrices();
+
     if (!initialCachedPredictionComparison) {
-      fetchPredictionComparison(
-        DEFAULT_ANALYTICS_START_DATE,
-        DEFAULT_ANALYTICS_END_DATE,
+      primaryRequests.push(
+        fetchPredictionComparison(
+          DEFAULT_ANALYTICS_START_DATE,
+          DEFAULT_ANALYTICS_END_DATE,
+        ),
       );
     }
-    fetchSentimentOverview(
-      SENTIMENT_DISPLAY_START_DATE,
-      SENTIMENT_DISPLAY_END_DATE,
-    );
+
+    void Promise.allSettled(primaryRequests).finally(() => {
+      fetchFan();
+      fetchHistoricalPrices();
+      fetchSentimentOverview(
+        SENTIMENT_DISPLAY_START_DATE,
+        SENTIMENT_DISPLAY_END_DATE,
+      );
+    });
   }, []);
 
   const fetchPredictions = async (requestOptions?: { forceRefresh?: boolean }) => {
@@ -775,9 +785,8 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
       forecastBand: null,
     }));
 
-  // If we have no historical data loaded yet, fall back to just the last price
+  // Drive the forecast chart from actual comparison data so both lines appear together.
   const hasActualPrices = actualPricesForChart.length > 0;
-  const bridgeDate = dateUtils.format(data.last_price_date, "short");
 
   // Build the forecast portion
   const forecastPricesForChart: ForecastChartPoint[] = validForecasts.map((f) => ({
@@ -793,28 +802,15 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
         : null,
   }));
 
-  let chartData: ForecastChartPoint[];
-
-  if (hasActualPrices) {
-    // Ensure the last actual point also carries the forecastPrice so the lines connect
-    const lastActual = actualPricesForChart[actualPricesForChart.length - 1];
-    lastActual.forecastPrice = lastActual.actualPrice;
-    chartData = [...actualPricesForChart, ...forecastPricesForChart];
-  } else {
-    // Fallback: just show a single actual point connected to forecasts
-    chartData = [
-      {
-        date: bridgeDate,
-        rawDate: lastPriceDateISO.split("T")[0],
-        actualPrice: data.last_price,
-        forecastPrice: data.last_price,
-        lowerBound: null,
-        upperBound: null,
-        forecastBand: null,
-      },
-      ...forecastPricesForChart,
-    ];
-  }
+  const chartData: ForecastChartPoint[] = hasActualPrices
+    ? (() => {
+        // Clone rows before bridging to avoid mutating source arrays.
+        const bridgedActual = actualPricesForChart.map((point) => ({ ...point }));
+        const lastActual = bridgedActual[bridgedActual.length - 1];
+        lastActual.forecastPrice = lastActual.actualPrice;
+        return [...bridgedActual, ...forecastPricesForChart];
+      })()
+    : [];
 
   const tableData = validForecasts.map((forecast, index) => ({
     ...forecast,
@@ -1247,7 +1243,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
           >
             {analyticsLoading && (
               <div className="mb-4 text-xs text-gray-500">
-                Syncing actual price series...
+                Syncing actual and forecast series...
               </div>
             )}
               <div className="flex items-center justify-between mb-8">
@@ -1271,6 +1267,11 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                 </div>
               </div>
               <div className="h-100 w-full">
+                {!hasActualPrices && analyticsLoading ? (
+                  <div className="h-full w-full flex items-center justify-center rounded-2xl border border-white/10 bg-white/2 text-sm text-gray-400">
+                    Loading actual and forecast prices...
+                  </div>
+                ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData}>
                   <defs>
@@ -1365,8 +1366,9 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                       fontSize: 11,
                     }}
                   />
-                </AreaChart>
-              </ResponsiveContainer>
+                  </AreaChart>
+                </ResponsiveContainer>
+                )}
             </div>
           </motion.div>
 
