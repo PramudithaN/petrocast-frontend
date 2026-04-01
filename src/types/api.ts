@@ -1,8 +1,11 @@
 export interface Forecast {
   date: string;
+  /** Point estimate used as the median forecast for display. */
   forecasted_price: number;
   forecasted_return: number;
   horizon: number;
+  lower_bound?: number;
+  upper_bound?: number;
 }
 
 export interface PredictionResponse {

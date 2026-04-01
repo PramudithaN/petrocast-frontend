@@ -174,6 +174,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
   const actualVal = parseFiniteNumber(point.actualPrice);
   const forecastVal = parseFiniteNumber(point.forecastPrice);
+  const lowerVal = parseFiniteNumber(point.lowerBound);
+  const upperVal = parseFiniteNumber(point.upperBound);
+  const hasBounds = lowerVal !== null && upperVal !== null;
   const isBridge = actualVal !== null && forecastVal !== null;
 
   return (
@@ -191,15 +194,27 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       {forecastVal !== null && (
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-oil-gold" />
-          <span className="text-xs text-gray-500">Forecast</span>
+          <span className="text-xs text-gray-500">Forecast (Median)</span>
           <span className="text-lg font-bold text-oil-gold font-display ml-auto">
             {formatCurrency(forecastVal)}
           </span>
         </div>
       )}
+      {hasBounds && (
+        <div className="mt-2 space-y-1 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-gray-500">Lower Bound</span>
+            <span className="font-mono text-gray-300">{formatCurrency(lowerVal)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-gray-500">Upper Bound</span>
+            <span className="font-mono text-gray-300">{formatCurrency(upperVal)}</span>
+          </div>
+        </div>
+      )}
       {!isBridge && (
         <p className="text-xs text-gray-500 mt-1.5">
-          {actualVal !== null ? "● Actual Price" : "◐ Forecasted"}
+          {actualVal === null ? "◐ Forecasted" : "● Actual Price"}
         </p>
       )}
     </div>
@@ -734,8 +749,18 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   // Build combined chart data: actual prices from Jan + forecast prices
   const lastPriceDateISO = data.last_price_date.split("T")[0];
 
+  type ForecastChartPoint = {
+    date: string;
+    rawDate: string;
+    actualPrice: number | null;
+    forecastPrice: number | null;
+    lowerBound: number | null;
+    upperBound: number | null;
+    forecastBand: [number, number] | null;
+  };
+
   // Use comparison/analytics data for actual prices (historical API only goes to Dec 2025)
-  const actualPricesForChart = (analyticsData?.comparison ?? [])
+  const actualPricesForChart: ForecastChartPoint[] = (analyticsData?.comparison ?? [])
     .filter((item) => {
       const d = item.date.split("T")[0];
       return d <= lastPriceDateISO && item.actual_price != null && isValidOilPrice(item.actual_price);
@@ -743,8 +768,11 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     .map((item) => ({
       date: dateUtils.format(item.date, "short"),
       rawDate: item.date.split("T")[0],
-      actualPrice: item.actual_price as number | null,
+      actualPrice: item.actual_price,
       forecastPrice: null as number | null,
+      lowerBound: null,
+      upperBound: null,
+      forecastBand: null,
     }));
 
   // If we have no historical data loaded yet, fall back to just the last price
@@ -752,19 +780,20 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const bridgeDate = dateUtils.format(data.last_price_date, "short");
 
   // Build the forecast portion
-  const forecastPricesForChart = validForecasts.map((f) => ({
+  const forecastPricesForChart: ForecastChartPoint[] = validForecasts.map((f) => ({
     date: dateUtils.format(f.date, "short"),
     rawDate: f.date.split("T")[0],
     actualPrice: null as number | null,
     forecastPrice: f.forecasted_price as number | null,
+    lowerBound: isValidOilPrice(f.lower_bound) ? f.lower_bound : null,
+    upperBound: isValidOilPrice(f.upper_bound) ? f.upper_bound : null,
+    forecastBand:
+      isValidOilPrice(f.lower_bound) && isValidOilPrice(f.upper_bound)
+        ? ([Math.min(f.lower_bound, f.upper_bound), Math.max(f.lower_bound, f.upper_bound)] as [number, number])
+        : null,
   }));
 
-  let chartData: Array<{
-    date: string;
-    rawDate: string;
-    actualPrice: number | null;
-    forecastPrice: number | null;
-  }>;
+  let chartData: ForecastChartPoint[];
 
   if (hasActualPrices) {
     // Ensure the last actual point also carries the forecastPrice so the lines connect
@@ -779,6 +808,9 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
         rawDate: lastPriceDateISO.split("T")[0],
         actualPrice: data.last_price,
         forecastPrice: data.last_price,
+        lowerBound: null,
+        upperBound: null,
+        forecastBand: null,
       },
       ...forecastPricesForChart,
     ];
@@ -805,12 +837,32 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
       ),
     },
     {
-      title: "Forecasted Price",
+      title: "Forecasted Price (Median)",
       dataIndex: "forecasted_price",
       key: "forecasted_price",
       render: (price: number) => (
         <span className="font-mono font-bold text-oil-gold text-base">
           ${formatPrice(price)}
+        </span>
+      ),
+    },
+    {
+      title: "Lower Bound",
+      dataIndex: "lower_bound",
+      key: "lower_bound",
+      render: (price?: number) => (
+        <span className="font-mono text-gray-300 text-sm">
+          {isFiniteNumber(price) ? `$${formatPrice(price)}` : "-"}
+        </span>
+      ),
+    },
+    {
+      title: "Upper Bound",
+      dataIndex: "upper_bound",
+      key: "upper_bound",
+      render: (price?: number) => (
+        <span className="font-mono text-gray-300 text-sm">
+          {isFiniteNumber(price) ? `$${formatPrice(price)}` : "-"}
         </span>
       ),
     },
@@ -856,8 +908,12 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const allPrices = chartData.flatMap((d) =>
     [d.actualPrice, d.forecastPrice].filter((v): v is number => v !== null),
   );
-  const minPrice = Math.min(...allPrices);
-  const maxPrice = Math.max(...allPrices);
+  const allBoundPrices = chartData.flatMap((d) =>
+    [d.lowerBound, d.upperBound].filter((v): v is number => v !== null),
+  );
+  const allPriceValues = [...allPrices, ...allBoundPrices];
+  const minPrice = Math.min(...allPriceValues);
+  const maxPrice = Math.max(...allPriceValues);
   const priceRange = maxPrice - minPrice;
   const safePriceRange = priceRange > 0 ? priceRange : Math.max(maxPrice * 0.05, 1);
 
@@ -1206,7 +1262,11 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                   </span>
                   <span className="flex items-center gap-1.5 text-gray-400">
                     <div className="w-2.5 h-2.5 rounded-full bg-oil-gold" />
-                    Forecast
+                    Forecast (Median)
+                  </span>
+                  <span className="flex items-center gap-1.5 text-gray-400">
+                    <div className="w-4 h-2 rounded-sm bg-oil-gold/15 border border-oil-gold/35" />
+                    Lower-Upper Bound
                   </span>
                 </div>
               </div>
@@ -1247,6 +1307,14 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                     tickFormatter={(val) => formatCurrency(parseFiniteNumber(val), 2, "-")}
                   />
                   <Tooltip content={<CustomTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="forecastBand"
+                    stroke="none"
+                    fill="#F59E0B"
+                    fillOpacity={0.12}
+                    isAnimationActive={false}
+                  />
                   {/* Actual prices area */}
                   <Area
                     type="monotone"
@@ -1360,7 +1428,6 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
           </motion.div>
         </>
       )}
-
       {activeTab === "historical" && (
         <>
           <motion.div

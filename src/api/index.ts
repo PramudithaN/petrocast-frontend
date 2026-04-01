@@ -98,11 +98,29 @@ const normalizePredictionResponse = (payload: unknown): PredictionResponse => {
 
       if (!date) return null;
 
+      const medianPrice =
+        toFiniteNumberOrNull(forecast.forecasted_price) ??
+        toFiniteNumberOrNull(forecast.median_price) ??
+        toFiniteNumberOrNull(forecast.p50) ??
+        0;
+      const lowerBound =
+        toFiniteNumberOrNull(forecast.lower_bound) ??
+        toFiniteNumberOrNull(forecast.lowerBound) ??
+        toFiniteNumberOrNull(forecast.confidence_interval_lower) ??
+        toFiniteNumberOrNull(forecast.ci_lower);
+      const upperBound =
+        toFiniteNumberOrNull(forecast.upper_bound) ??
+        toFiniteNumberOrNull(forecast.upperBound) ??
+        toFiniteNumberOrNull(forecast.confidence_interval_upper) ??
+        toFiniteNumberOrNull(forecast.ci_upper);
+
       return {
         date,
-        forecasted_price: toFiniteNumberOrDefault(forecast.forecasted_price),
+        forecasted_price: medianPrice,
         forecasted_return: toFiniteNumberOrDefault(forecast.forecasted_return),
         horizon: toIntegerOrZero(forecast.horizon) || index + 1,
+        ...(lowerBound === null ? {} : { lower_bound: lowerBound }),
+        ...(upperBound === null ? {} : { upper_bound: upperBound }),
       };
     })
     .filter((forecast): forecast is PredictionResponse["forecasts"][number] => forecast !== null);
