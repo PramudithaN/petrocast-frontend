@@ -481,6 +481,8 @@ const normalizePredictionComparisonResponse = (
         predicted_price: toFiniteNumberOrNull(row.predicted_price),
         predicted_price_median: toFiniteNumberOrNull(row.predicted_price_median),
         predicted_price_latest: toFiniteNumberOrNull(row.predicted_price_latest),
+        predicted_price_lower_bound: toFiniteNumberOrNull(row.lower_bound),
+        predicted_price_upper_bound: toFiniteNumberOrNull(row.upper_bound),
         prediction_count: toIntegerOrZero(row.prediction_count),
         error: toFiniteNumberOrNull(row.error),
         abs_error: toFiniteNumberOrNull(row.abs_error),

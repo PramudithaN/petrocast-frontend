@@ -79,6 +79,8 @@ export interface PredictionComparisonPoint {
   predicted_price: number | null;
   predicted_price_median: number | null;
   predicted_price_latest: number | null;
+  predicted_price_lower_bound: number | null;
+  predicted_price_upper_bound: number | null;
   prediction_count: number;
   error: number | null;
   abs_error: number | null;

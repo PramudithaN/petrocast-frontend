@@ -31,6 +31,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   LineChart,
+  ComposedChart,
   Line,
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -239,6 +240,18 @@ const AnalyticsTooltip = ({ active, payload, label }: any) => {
           <span className="text-gray-500">Predicted</span>
           <span className="font-mono text-oil-gold">{formatCurrency(point.predictedPrice)}</span>
         </div>
+        {isFiniteNumber(point.lowerBound) && isFiniteNumber(point.upperBound) && (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-gray-500">Lower Bound</span>
+              <span className="font-mono text-emerald-400">{formatCurrency(point.lowerBound)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-gray-500">Upper Bound</span>
+              <span className="font-mono text-emerald-400">{formatCurrency(point.upperBound)}</span>
+            </div>
+          </>
+        )}
         <div className="flex items-center justify-between gap-4">
           <span className="text-gray-500">Absolute Error</span>
           <span className="font-mono text-white">{formatCurrency(point.absoluteError)}</span>
@@ -976,13 +989,23 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     predictedPrice: item.predicted_price,
     medianPrice: item.predicted_price_median,
     latestPrice: item.predicted_price_latest,
+    lowerBound: item.predicted_price_lower_bound,
+    upperBound: item.predicted_price_upper_bound,
+    forecastBand:
+      isFiniteNumber(item.predicted_price_lower_bound) &&
+      isFiniteNumber(item.predicted_price_upper_bound)
+        ? ([
+            Math.min(item.predicted_price_lower_bound, item.predicted_price_upper_bound),
+            Math.max(item.predicted_price_lower_bound, item.predicted_price_upper_bound),
+          ] as [number, number])
+        : null,
     absoluteError: item.abs_error,
     percentError: item.abs_pct_error,
     predictionCount: item.prediction_count,
     rawDate: item.date,
   }));
   const analyticsPriceValues = analyticsChartData.flatMap((item) =>
-    [item.actualPrice, item.predictedPrice].filter(isFiniteNumber),
+    [item.actualPrice, item.predictedPrice, item.lowerBound, item.upperBound].filter(isFiniteNumber),
   );
   const analyticsMinPrice = analyticsPriceValues.length
     ? Math.min(...analyticsPriceValues)
@@ -2024,12 +2047,22 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                         <div className="w-6 h-0.5 bg-oil-gold" />
                         Predicted
                       </span>
+                      <span className="flex items-center gap-1.5 text-gray-400">
+                        <div className="w-6 h-3 rounded-sm bg-oil-gold/20" />
+                        Forecast Range
+                      </span>
                     </div>
                   </div>
 
                   <div className="h-105 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analyticsChartData}>
+                      <ComposedChart data={analyticsChartData}>
+                        <defs>
+                          <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.15} />
+                            <stop offset="100%" stopColor="#F59E0B" stopOpacity={0.05} />
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="rgba(255,255,255,0.04)"
@@ -2057,6 +2090,13 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                           }
                         />
                         <Tooltip content={<AnalyticsTooltip />} />
+                        <Area
+                          type="monotone"
+                          dataKey="forecastBand"
+                          stroke="none"
+                          fill="url(#forecastBand)"
+                          isAnimationActive={false}
+                        />
                         <Line
                           type="monotone"
                           dataKey="actualPrice"
@@ -2083,7 +2123,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                             strokeWidth: 2,
                           }}
                         />
-                      </LineChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 </motion.div>
