@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  FanResponse,
   HistoricalPricesResponse,
   PredictionComparisonResponse,
   PredictionResponse,
@@ -10,7 +9,6 @@ import {
   SentimentOverviewResponse,
 } from "../types/api";
 import {
-  fetchFanPredictions as fetchFanPredictionsApi,
   fetchHistoricalPricesProgressive as fetchHistoricalPricesProgressiveApi,
   fetchPredictionComparison as fetchPredictionComparisonApi,
   fetchPredictions as fetchPredictionsApi,
@@ -367,7 +365,6 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
   const [data, setData] = useState<PredictionResponse | null>(() => initialCachedPrediction);
   const [historicalData, setHistoricalData] =
     useState<HistoricalPricesResponse | null>(null);
-  const [fanData, setFanData] = useState<FanResponse | null>(null);
   const [analyticsData, setAnalyticsData] =
     useState<PredictionComparisonResponse | null>(() => initialCachedPredictionComparison);
   const [sentimentData, setSentimentData] =
@@ -457,7 +454,6 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     }
 
     void Promise.allSettled(primaryRequests).finally(() => {
-      // fetchFan();
       fetchHistoricalPrices();
       fetchSentimentOverview(
         SENTIMENT_DISPLAY_START_DATE,
@@ -484,25 +480,6 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
       setLoading(false);
     }
   };
-
-  // const fetchFan = async () => {
-  //   try {
-  //     const result = await fetchFanPredictionsApi();
-  //     setFanData(result);
-  //     notifyForTab("fan", {
-  //       type: "info",
-  //       title: "Fan chart ready",
-  //       message: `${result.fan.length} probabilistic data points loaded`,
-  //     });
-  //   } catch (err) {
-  //     const msg = err instanceof Error ? err.message : "Fan chart data unavailable";
-  //     notifyForTab("fan", {
-  //       type: "warning",
-  //       title: "Fan chart unavailable",
-  //       message: msg,
-  //     });
-  //   }
-  // };
 
   const fetchHistoricalPrices = async () => {
     try {
