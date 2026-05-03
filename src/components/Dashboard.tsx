@@ -51,7 +51,6 @@ import {
 } from "lucide-react";
 import CountUp from "react-countup";
 import AnimatedButton from "./ui/AnimatedButton";
-import FanChart from "./FanChart";
 import ExplainPanel, { ExplainPanelSkeleton } from "./ExplainPanel";
 import { useNotification } from "../context/NotificationContext";
 import { useDateUtils } from "../utils/dateUtils";
@@ -458,7 +457,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     }
 
     void Promise.allSettled(primaryRequests).finally(() => {
-      fetchFan();
+      // fetchFan();
       fetchHistoricalPrices();
       fetchSentimentOverview(
         SENTIMENT_DISPLAY_START_DATE,
@@ -486,24 +485,24 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     }
   };
 
-  const fetchFan = async () => {
-    try {
-      const result = await fetchFanPredictionsApi();
-      setFanData(result);
-      notifyForTab("fan", {
-        type: "info",
-        title: "Fan chart ready",
-        message: `${result.fan.length} probabilistic data points loaded`,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Fan chart data unavailable";
-      notifyForTab("fan", {
-        type: "warning",
-        title: "Fan chart unavailable",
-        message: msg,
-      });
-    }
-  };
+  // const fetchFan = async () => {
+  //   try {
+  //     const result = await fetchFanPredictionsApi();
+  //     setFanData(result);
+  //     notifyForTab("fan", {
+  //       type: "info",
+  //       title: "Fan chart ready",
+  //       message: `${result.fan.length} probabilistic data points loaded`,
+  //     });
+  //   } catch (err) {
+  //     const msg = err instanceof Error ? err.message : "Fan chart data unavailable";
+  //     notifyForTab("fan", {
+  //       type: "warning",
+  //       title: "Fan chart unavailable",
+  //       message: msg,
+  //     });
+  //   }
+  // };
 
   const fetchHistoricalPrices = async () => {
     try {
@@ -638,7 +637,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
     try {
       await Promise.allSettled([
         fetchPredictions({ forceRefresh: true }),
-        fetchFan(),
+        // fetchFan(),
         fetchHistoricalPrices(),
         fetchSentimentOverview(
           SENTIMENT_DISPLAY_START_DATE,
@@ -2133,28 +2132,7 @@ function Dashboard() { // NOSONAR: This container intentionally orchestrates mul
                 </div>
               )}
 
-              {fanData && fanData.fan.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="glass p-6 md:p-8 rounded-3xl"
-                >
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-lg font-bold text-white font-display flex items-center gap-3">
-                      <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-blue" />
-                      Probabilistic Fan Chart
-                    </h3>
-                    <span className="text-xs text-gray-500">
-                      Uncertainty bands: P10 – P90
-                    </span>
-                  </div>
-                  <FanChart
-                    fan={fanData.fan}
-                    lastPrice={fanData.last_price}
-                    lastPriceDate={fanData.last_price_date}
-                  />
-                </motion.div>
-              )}
+
             </>
           )}
         </>

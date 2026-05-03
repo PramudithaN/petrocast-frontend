@@ -2,11 +2,14 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { Pagination } from "antd";
 import { motion } from "framer-motion";
 import {
+  Brain,
   Calendar,
+  Cpu,
   ExternalLink,
   Newspaper,
   RefreshCw,
   Search,
+  Timer,
 } from "lucide-react";
 import { fetchNews, FetchNewsOptions, getCachedNews } from "../api";
 import { NewsArticle } from "../types/api";
@@ -68,6 +71,18 @@ const formatArticleDate = (dateString: string) => {
   }).format(date);
 };
 
+const FINBERT_METRICS_URL = "https://pramudithan-oil-price-prediction.hf.space/finbert/metrics";
+
+interface FinBertMetrics {
+  model_load_time_seconds: number | null;
+  model_loaded_at: string | null;
+  device: string | null;
+  last_inference_run_at: string | null;
+  last_inference_article_count: number | null;
+  last_inference_total_seconds: number | null;
+  last_inference_per_article_seconds: number | null;
+}
+
 const initialCachedNews = getCachedNews();
 
 const News = () => {
@@ -79,6 +94,9 @@ const News = () => {
   const [daysInput, setDaysInput] = useState("7");
   const [dateInput, setDateInput] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [finbertMetrics, setFinbertMetrics] = useState<FinBertMetrics | null>(null);
+  const [finbertLoading, setFinbertLoading] = useState(true);
+  const [finbertError, setFinbertError] = useState<string | null>(null);
   const { notify } = useNotification();
   const initialFetchDone = useRef(false);
 
@@ -148,6 +166,23 @@ const News = () => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
     loadNews();
+  }, []);
+
+  useEffect(() => {
+    setFinbertLoading(true);
+    fetch(FINBERT_METRICS_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<FinBertMetrics>;
+      })
+      .then((data) => {
+        setFinbertMetrics(data);
+        setFinbertError(null);
+      })
+      .catch((err) => {
+        setFinbertError(err instanceof Error ? err.message : "Failed to load FinBERT metrics");
+      })
+      .finally(() => setFinbertLoading(false));
   }, []);
 
   const handleFilterSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -398,6 +433,116 @@ const News = () => {
             )}
           </div>
         )}
+
+        {/* ── FinBERT Model Metrics ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-6 rounded-full bg-linear-to-b from-oil-cyan to-oil-blue" />
+            <h2 className="text-lg font-bold text-white font-display flex items-center gap-2">
+              <Brain size={18} className="text-oil-cyan" />
+              FinBERT Sentiment Model Metrics
+            </h2>
+          </div>
+
+          {finbertLoading && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map((k) => (
+                <div key={k} className="skeleton-loader h-24 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          )}
+
+          {!finbertLoading && finbertError && (
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {finbertError}
+            </div>
+          )}
+
+          {!finbertLoading && finbertMetrics && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-strong rounded-3xl p-6 border border-oil-cyan/15 space-y-5"
+            >
+              {/* Device & Load info */}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="glass rounded-2xl px-5 py-4 flex items-start gap-3">
+                  <Cpu size={18} className="text-oil-cyan mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">Device</p>
+                    <p className="text-base font-semibold text-white">
+                      {finbertMetrics.device ?? <span className="text-gray-500">—</span>}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="glass rounded-2xl px-5 py-4 flex items-start gap-3">
+                  <Timer size={18} className="text-oil-gold mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">Model Load Time</p>
+                    <p className="text-base font-semibold text-white">
+                      {finbertMetrics.model_load_time_seconds === null
+                        ? <span className="text-gray-500">—</span>
+                        : `${finbertMetrics.model_load_time_seconds.toFixed(2)} s`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="glass rounded-2xl px-5 py-4 flex items-start gap-3">
+                  <Calendar size={18} className="text-purple-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">Model Loaded At</p>
+                    <p className="text-base font-semibold text-white">
+                      {finbertMetrics.model_loaded_at
+                        ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(finbertMetrics.model_loaded_at))
+                        : <span className="text-gray-500">—</span>}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Last Inference stats */}
+              <div>
+                <p className="text-xs uppercase tracking-widest text-gray-500 mb-3">Last Inference Run</p>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="glass rounded-2xl px-5 py-4">
+                    <p className="text-xs text-gray-500 mb-1">Run At</p>
+                    <p className="text-sm font-semibold text-white">
+                      {finbertMetrics.last_inference_run_at
+                        ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(finbertMetrics.last_inference_run_at))
+                        : <span className="text-gray-500">—</span>}
+                    </p>
+                  </div>
+
+                  <div className="glass rounded-2xl px-5 py-4">
+                    <p className="text-xs text-gray-500 mb-1">Articles Processed</p>
+                    <p className="text-2xl font-bold text-oil-cyan font-display">
+                      {finbertMetrics.last_inference_article_count ?? <span className="text-gray-500 text-sm">—</span>}
+                    </p>
+                  </div>
+
+                  <div className="glass rounded-2xl px-5 py-4">
+                    <p className="text-xs text-gray-500 mb-1">Total Duration</p>
+                    <p className="text-2xl font-bold text-oil-gold font-display">
+                      {finbertMetrics.last_inference_total_seconds === null
+                        ? <span className="text-gray-500 text-sm">—</span>
+                        : `${finbertMetrics.last_inference_total_seconds.toFixed(2)} s`}
+                    </p>
+                  </div>
+
+                  <div className="glass rounded-2xl px-5 py-4">
+                    <p className="text-xs text-gray-500 mb-1">Per Article</p>
+                    <p className="text-2xl font-bold text-purple-400 font-display">
+                      {finbertMetrics.last_inference_per_article_seconds === null
+                        ? <span className="text-gray-500 text-sm">—</span>
+                        : `${finbertMetrics.last_inference_per_article_seconds.toFixed(3)} s`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </section>
       </div>
     </div>
   );
