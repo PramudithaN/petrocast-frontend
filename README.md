@@ -17,6 +17,15 @@ A React TypeScript project built with Vite.
 ![Tests](https://img.shields.io/badge/Tests-Vitest-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-green)
 
+---
+
+## 📸 Preview
+
+**Hero**
+![Hero](public/Images/petrocast.jpeg)
+
+---
+
 ## Tech Stack
 
 - **React 18+** - UI library
